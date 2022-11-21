@@ -15,7 +15,7 @@ struct Context {
 };
 
 static Context g_context = {};
-#define FRAME_IMAGE_PIXEL_BYTES 3
+#define FRAME_IMAGE_PIXEL_BYTES 4
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 static void processInput(GLFWwindow* window) {
@@ -27,17 +27,18 @@ static size_t getFrameImageSizeInBytes() {
     return FRAME_IMAGE_PIXEL_BYTES * g_context.frameX * g_context.frameY;
 }
 
-static void changeFrameSize(int x, int y) {
-    if (x <= 0 || y <= 0)
-        return;
-    if (x == g_context.frameX && y == g_context.frameY)
-        return;
+static void changeFrameSize(const int x, const int y) {
+    // if (x <= 0 || y <= 0)
+    //     return;
+    // if (x == g_context.frameX && y == g_context.frameY)
+    //     return;
     g_context.frameX = x;
     g_context.frameY = y;
-    if (g_context.frameImage) {
+    if (g_context.frameImage != nullptr) {
         free(g_context.frameImage);
     }
     g_context.frameImage = (uint8_t*)malloc(getFrameImageSizeInBytes());
+    assert(g_context.frameImage != nullptr);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -45,7 +46,6 @@ static void framebufferSizeChangedGlfwCallback(GLFWwindow* window, int width, in
     // make sure the viewport matches the new window dimensions; note that width and
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
-    changeFrameSize(width, height);
 }
 
 static void GLAPIENTRY debugMessageOpenglCallback(GLenum source,
@@ -61,8 +61,22 @@ static void GLAPIENTRY debugMessageOpenglCallback(GLenum source,
 
 static void uploadFrameImageToGpu(GLuint texture) {
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, g_context.frameX, g_context.frameY, 0, GL_RGB, GL_UNSIGNED_BYTE,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_context.frameX, g_context.frameY, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                  g_context.frameImage);
+}
+
+static inline uint8_t floatToUNorm8(const float value) {
+    return (uint8_t)(value * 255.0f);
+}
+static void renderFrame() {
+    assert(g_context.frameImage != nullptr);
+    const int frameX = g_context.frameX;
+    const int frameY = g_context.frameY;
+    for (int x = 0; x < frameX; x++) {
+        for (int y = 0; y < frameY; y++) {
+            g_context.frameImage[(x + y * frameX) * FRAME_IMAGE_PIXEL_BYTES] = floatToUNorm8((float)x / (float)frameX);
+        }
+    }
 }
 
 int main() {
@@ -116,9 +130,9 @@ int main() {
             "#version 460 core\n"
             "layout(location = 0) out vec4 out_fragColor;\n"
             "layout(location = 0) in vec2 u_uv;\n"
-            "// uniform sampler2D frameTexture;\n"
+            "uniform sampler2D frameTexture;\n"
             "void main() {\n"
-            "	out_fragColor = vec4(u_uv, 0.0f, 1.0f); //vec4(texture(frameTexture, u_uv).rgb, 1.0f);\n"
+            "	out_fragColor = vec4(texture(frameTexture, u_uv).rgb, 1.0f);\n"
             "}\n";
 
         GLint success;
@@ -177,24 +191,42 @@ int main() {
 
     GLuint frameTexture;
     glGenTextures(1, &frameTexture);
+    glBindTexture(GL_TEXTURE_2D, frameTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     memset(g_context.frameImage, 127, getFrameImageSizeInBytes());
     uploadFrameImageToGpu(frameTexture);
-
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 
     // render loop
     while (!glfwWindowShouldClose(window)) {
         processInput(window);
 
+        int currentWindowX = 0;
+        int currentWindowY = 0;
+        glfwGetWindowSize(window, &currentWindowX, &currentWindowY);
+
+        if (g_context.frameX != currentWindowX || g_context.frameY != currentWindowY) {
+            changeFrameSize(currentWindowX, currentWindowY);
+        }
+
+        memset(g_context.frameImage, 0, getFrameImageSizeInBytes());
+        renderFrame();
+        uploadFrameImageToGpu(frameTexture);
+        printf("[Frame] x:%i y:%i mem:%ib ptr:%p\n", g_context.frameX, g_context.frameY, getFrameImageSizeInBytes(),
+               g_context.frameImage);
+
         // render
-        glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(shaderProgram);
         glBindVertexArray(quadVao);
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, frameTexture);
         glDrawArrays(GL_TRIANGLES, 0, 3 * 2);
 
         glfwSwapBuffers(window);
+        glFlush();
         glfwPollEvents();
     }
 
