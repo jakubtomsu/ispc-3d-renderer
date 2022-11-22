@@ -28,10 +28,12 @@ static size_t getFrameImageSizeInBytes() {
 }
 
 static void changeFrameSize(const int x, const int y) {
-    // if (x <= 0 || y <= 0)
-    //     return;
-    // if (x == g_context.frameX && y == g_context.frameY)
-    //     return;
+    if (x <= 0 || y <= 0) {
+        return;
+    }
+    if (x == g_context.frameX && y == g_context.frameY) {
+        return;
+    }
     g_context.frameX = x;
     g_context.frameY = y;
     if (g_context.frameImage != nullptr) {
