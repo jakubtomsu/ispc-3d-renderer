@@ -32,7 +32,7 @@ namespace ispc { /* namespace */
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 extern "C" {
 #endif // __cplusplus
-    extern void renderTriangles(const int32_t v0x, const int32_t v0y, const int32_t v1x, const int32_t v1y, const int32_t v2x, const int32_t v2y, const int32_t screenX, const int32_t screenY);
+    extern void renderFrame(uint8_t * outFrame, const int32_t frameSizeX, const int32_t frameSizeY, const float * pointData, const int32_t pointNum, const float transformMat4[][4]);
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 } /* end extern C */
 #endif // __cplusplus

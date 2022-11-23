@@ -9,3 +9,4 @@ Cpp11BracedListStyle: true
 SpaceBeforeCpp11BracedList: false
 AccessModifierOffset: -4
 SortIncludes: false
+AllowShortIfStatementsOnASingleLine : true
