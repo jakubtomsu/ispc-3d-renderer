@@ -1,3 +1,7 @@
+// https://fgiesen.wordpress.com/2013/02/08/triangle-rasterization-in-practice/
+// https://fgiesen.wordpress.com/2013/02/10/optimizing-the-basic-rasterizer/
+// https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/perspective-correct-interpolation-vertex-attributes
+
 inline int minInt3(const int x, const int y, const int z) {
     return min(x, min(y, z));
 }
@@ -10,12 +14,15 @@ int orient2d(const int<2>& a, const int<2>& b, const int<2>& c) {
     return (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x);
 }
 
+inline float edgeFunc(const float<3>& a, const float<3>& b, const float<3>& c) {
+    return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
+}
+
 export void renderFrame(uniform uint8 outFrame[],
                         const uniform int frameSizeX, const uniform int frameSizeY,
                         const uniform float pointData[], const uniform int pointNum,
                         const uniform float transformMat4[4][4]) {
-                            
-    // Loop the 3d vertices
+    // Render Geometry
     for(int pointIndex = 0; pointIndex < pointNum; pointIndex += 3 * 3) {
         // Load vertex data
         float<4> positions[3] = {
@@ -23,7 +30,7 @@ export void renderFrame(uniform uint8 outFrame[],
             {pointData[pointIndex + 3], pointData[pointIndex + 4], pointData[pointIndex + 5], 1.0f},
             {pointData[pointIndex + 6], pointData[pointIndex + 7], pointData[pointIndex + 8], 1.0f},
         };
-        
+
         float<4> screenPositions[3] = {0};
         for(int v = 0; v < 3; v++) {
             for(int row = 0; row < 4; row++) {
@@ -38,6 +45,7 @@ export void renderFrame(uniform uint8 outFrame[],
             screenPositions[v].z /= screenPositions[v].w;
         }
         
+        // Transform into pixel positions
         const int<2> v0 = {
             (screenPositions[0].x * 0.5f + 0.5f) * frameSizeX,
             (screenPositions[0].y * 0.5f + 0.5f) * frameSizeY,
@@ -50,7 +58,7 @@ export void renderFrame(uniform uint8 outFrame[],
             (screenPositions[2].x * 0.5f + 0.5f) * frameSizeX,
             (screenPositions[2].y * 0.5f + 0.5f) * frameSizeY,
         };
-                        
+
         // Compute triangle bounding box
         const int<2> bbMin = {max(0, minInt3(v0.x, v1.x, v2.x)),
                               max(0, minInt3(v0.y, v1.y, v2.y))};
@@ -71,7 +79,13 @@ export void renderFrame(uniform uint8 outFrame[],
         int w1Row = orient2d(v2, v0, p);
         int w2Row = orient2d(v0, v1, p);
         
-        const uint8<3> triangleColor = 100 + pointIndex * 10;
+        const float area = edgeFunc(positions[0].xyz, positions[1].xyz, positions[2].xyz);
+        
+        const uint8<3> triangleColor = 100 + (pointIndex * 10) % 50;
+        
+        const float screenPosInvZ0 = 1.0f / screenPositions[0].z;
+        const float screenPosInvZ1 = 1.0f / screenPositions[1].z;
+        const float screenPosInvZ2 = 1.0f / screenPositions[2].z;
         
         for(p.y = bbMin.y; p.y <= bbMax.y; p.y++) {
             // Barycentric coords at start of the row
@@ -81,13 +95,23 @@ export void renderFrame(uniform uint8 outFrame[],
             
             for(p.x = bbMin.x; p.x <= bbMax.x; p.x++) {
                 // If 'p' is on or inside all edges, render the pixel
-                if(w0 >= 0 && w1 >= 0 && w2 >= 0) {
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 0] = triangleColor.r;
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 1] = triangleColor.g;
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 2] = triangleColor.b;
+                //if(w0 >= 0 && w1 >= 0 && w2 >= 0) {
+                if((w0 | w1 | w2) >= 0) {
+                    const float w0a = (float)w0 / area;
+                    const float w1a = (float)w1 / area;
+                    const float w2a = (float)w2 / area;
+                    const float oneOverZ = w0a * screenPositions[0].z + w1a * screenPositions[1].z + w2a * screenPositions[2].z;
+                    const float z = 1.0f / (w0a * screenPosInvZ0 + w1a * screenPosInvZ1 + w2a * screenPosInvZ2);
+                    if(z > 0.0f) {
+                    outFrame[(p.x + p.y * frameSizeX) * 4 + 0] = z * 100.0f;
+                    outFrame[(p.x + p.y * frameSizeX) * 4 + 1] = z * 100.0f;
+                    outFrame[(p.x + p.y * frameSizeX) * 4 + 2] = z * 100.0f;
+                    } else {
+                    outFrame[(p.x + p.y * frameSizeX) * 4 + 0] = 255;
+                    }
                 }
                 
-                // One step to the right   
+                // One step to the right
                 w0 += a12;
                 w1 += a20;
                 w2 += a01;

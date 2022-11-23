@@ -1,3 +1,5 @@
 *.exe
 *.obj
 .vs/
+# .obj 3d models use the same file extension as object files on windows ...
+!models/*
