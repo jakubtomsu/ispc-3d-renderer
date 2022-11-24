@@ -313,7 +313,7 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
 
     g_context.cameraEuler.x -= mouseDelta.y * deltaTime * 1.0f;
     g_context.cameraEuler.y += mouseDelta.x * deltaTime * 1.0f;
-    g_context.cameraEuler.x = clamp(g_context.cameraEuler.x, -PI * 0.5f, PI * 0.5f);
+    // g_context.cameraEuler.x = clamp(g_context.cameraEuler.x, -PI * 0.5f, PI * 0.5f);
 
     g_context.camera.rot = quatFromEuler(g_context.cameraEuler);
     g_context.camera.pos = vec3Add(g_context.camera.pos, quatMulVec3(g_context.camera.rot, localMove));
@@ -474,7 +474,7 @@ int main() {
 
     static float vertexBuffer[1024 * 1024] = {};
     size_t vertexBufferLen = 0;
-    vertexBufferLen = loadModel("models/bunny.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
+    vertexBufferLen = loadModel("models/cube.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
 
     double prevTime = glfwGetTime();
     // render loop
@@ -497,7 +497,7 @@ int main() {
         g_context.camera.rot = quatNormalize(g_context.camera.rot);
 
         // Clear framebuffer
-        memset(g_context.frameImage, 0, getFrameImageSizeInBytes());
+        // memset(g_context.frameImage, 0, getFrameImageSizeInBytes());
 
         // renderFrameCpp();
         // clang-format off
