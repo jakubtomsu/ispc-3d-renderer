@@ -118,10 +118,10 @@ export void renderFrame(uniform uint8 outFrame[],
                 }
                 transformedPositions[v][row] = sum;
             }
+            screenPositonClipZ[v] = transformedPositions[v].z;
             transformedPositions[v].x /= transformedPositions[v].w;
             transformedPositions[v].y /= transformedPositions[v].w;
             transformedPositions[v].z /= transformedPositions[v].w;
-            screenPositonClipZ[v] = transformedPositions[v].z;
         }
         
         // Clip triangles
@@ -206,15 +206,16 @@ export void renderFrame(uniform uint8 outFrame[],
                     const float w0a = (float)w0 / area;
                     const float w1a = (float)w1 / area;
                     const float w2a = (float)w2 / area;
-                    const float z = 1.0f / (w0a * screenPosInvZ0 + w1a * screenPosInvZ1 + w2a * screenPosInvZ2);
+                    const float oneOverZ = w0a * screenPosInvZ0 + w1a * screenPosInvZ1 + w2a * screenPosInvZ2;
+                    const float z = 1.0f / oneOverZ;
                     const float r = (w0a * col0[0] + w1a * col1[0] + w2a * col2[0]) * z;
                     const float g = (w0a * col0[1] + w1a * col1[1] + w2a * col2[1]) * z;
                     const float b = (w0a * col0[2] + w1a * col1[2] + w2a * col2[2]) * z;
                     // const float oneOverZ = w0a * screenPositonClipZ[0] + w1a * screenPositonClipZ[1] + w2a * screenPositonClipZ[2];
                     // if(z > 0.0f) {
                     outFrame[(p.x + p.y * frameSizeX) * 4 + 0] = r;
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 1] = g;
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 2] = b;
+                    outFrame[(p.x + p.y * frameSizeX) * 4 + 1] = clamp(oneOverZ * 0.0000001f, 0.0f, 255.0f);
+                    outFrame[(p.x + p.y * frameSizeX) * 4 + 2] = clamp(oneOverZ * 0.0000001f, 0.0f, 255.0f);
                     // } else outFrame[(p.x + p.y * frameSizeX) * 4 + 0] = 255;
                 }
                 
@@ -229,10 +230,10 @@ export void renderFrame(uniform uint8 outFrame[],
             w1Row += b20;
             w2Row += b01;
         }
-        
+    
         const uint8<3> triLineCol = {255, 255, 255};
-        drawLine(outFrame, frameSizeX, frameSizeY, v0.x, v0.y, v1.x, v1.y, triLineCol);
-        drawLine(outFrame, frameSizeX, frameSizeY, v1.x, v1.y, v2.x, v2.y, triLineCol);
-        drawLine(outFrame, frameSizeX, frameSizeY, v2.x, v2.y, v0.x, v0.y, triLineCol);
+        // drawLine(outFrame, frameSizeX, frameSizeY, v0.x, v0.y, v1.x, v1.y, triLineCol);
+        // drawLine(outFrame, frameSizeX, frameSizeY, v1.x, v1.y, v2.x, v2.y, triLineCol);
+        // drawLine(outFrame, frameSizeX, frameSizeY, v2.x, v2.y, v0.x, v0.y, triLineCol);
     }
 }

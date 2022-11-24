@@ -474,7 +474,7 @@ int main() {
 
     static float vertexBuffer[1024 * 1024] = {};
     size_t vertexBufferLen = 0;
-    vertexBufferLen = loadModel("models/cube.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
+    vertexBufferLen = loadModel("models/bunny.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
 
     double prevTime = glfwGetTime();
     // render loop
