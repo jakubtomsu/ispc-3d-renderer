@@ -122,11 +122,30 @@ static uniform int<2> transformToPixelCoord(uniform const float<2> p, uniform co
     return result;
 }
 
+static float dot(float<3> a, const float<3> b) {
+    a *= b;
+    return a.x + a.y + a.z;
+}
+
+static float<3> lerp(const float<3> a, const float<3> b, const float t) {
+    return (1.0f - t) * a + t * b;
+}
+
+static float length(float<3> a) {
+    a *= a;
+    return sqrt(a.x + a.y + a.z);
+}
+
+static float<3> normalize(const float<3> a) {
+    return a / length(a);
+}
+
 export void renderFrame(uniform uint8 framebufferColor[],
                         uniform uint16 framebufferDepth[],
-                        const uniform int frameSizeX, const uniform int frameSizeY,
-                        const uniform float pointData[], const uniform int pointNum,
-                        const uniform float transformMat4[4][4]) {
+                        uniform const int frameSizeX, uniform const int frameSizeY,
+                        uniform const float pointData[], uniform const int pointNum,
+                        uniform const float transformMat4[4][4],
+                        uniform const float cameraX, uniform const float cameraY, uniform const float cameraZ) {
     memset(framebufferColor, 42, frameSizeX * frameSizeY * FRAMEBUFFER_COLOR_BYTES);
     memset(framebufferDepth, 0xffff, frameSizeX * frameSizeY * FRAMEBUFFER_DEPTH_BYTES);
 
@@ -139,10 +158,9 @@ export void renderFrame(uniform uint8 framebufferColor[],
             {pointData[pointIndex + 12], pointData[pointIndex + 13], pointData[pointIndex + 14], 1.0f},
         };
 
-        uniform float<4> transformedPositions[3];
+        uniform float<4> transformedPositions[3] = {0};
         uniform float<3> screenPositonClipZ;
         for(uniform int v = 0; v < 3; v++) {
-        // foreach(v = 0...3) {
             for(uniform int row = 0; row < 4; row++) {
                 uniform float sum = 0.0f;
                 for(uniform int col = 0; col < 4; col++) {
@@ -188,10 +206,20 @@ export void renderFrame(uniform uint8 framebufferColor[],
         normals[1] *= screenPosInvZ1;
         normals[2] *= screenPosInvZ2;
         
+        positions[0] *= screenPosInvZ0;
+        positions[1] *= screenPosInvZ1;
+        positions[2] *= screenPosInvZ2;
+        
         // Barycentric coordinates at bbMin corner
         uniform Edge edge0 = initEdge(v1, v2, bbMin);
         uniform Edge edge1 = initEdge(v2, v0, bbMin);
         uniform Edge edge2 = initEdge(v0, v1, bbMin);
+        
+        const float<3> sunDir = {0.707, 0.707, 0};
+        const float<3> sunCol = {1.64,1.27,0.99};
+        const float<3> skyCol = {0.16,0.20,0.28};
+        const float<3> indirectCol = {0.40,0.28,0.20};
+        const float<3> cam = {cameraX, cameraY, cameraZ};
                 
         for(uniform int y = bbMin.y; y < bbMax.y; y++) {
             // Barycentric coords at start of the row
@@ -208,7 +236,6 @@ export void renderFrame(uniform uint8 framebufferColor[],
                     const float w2a = (float)w2 / area;
                     const float oneOverZ = w0a * screenPosInvZ0 + w1a * screenPosInvZ1 + w2a * screenPosInvZ2;
                     const float z = 1.0f / oneOverZ;
-                    const float<3> normal = (w0a * normals[0] + w1a * normals[1] + w2a * normals[2]) * z;
                     const float depth = 
                         (w0a * screenPositonClipZ[0] +
                         w1a * screenPositonClipZ[1] +
@@ -217,12 +244,33 @@ export void renderFrame(uniform uint8 framebufferColor[],
                     if(depth > 0.0f) {
                         const int index = x + y * frameSizeX;
                         const uint16 prevDepth = framebufferDepth[index];
-                        const uint16 depth16 = depth * 10000;
+                        const uint16 depth16 = depth * 500;
                         if(depth16 < prevDepth) {
-                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 0] = normal[0] * 100;
-                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 1] = normal[1] * 100;
-                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 2] = normal[2] * 100;
                             framebufferDepth[index] = depth16;
+
+                            const float<3> normal = (w0a * normals[0] + w1a * normals[1] + w2a * normals[2]) * z;
+                            const float<3> position = (w0a * positions[0].xyz + w1a * positions[1].xyz + w2a * positions[2].xyz) * z;
+
+                            const float<3> viewDir = normalize(cam - position);
+                            
+                            // Compute the pixel color
+                            float<3> color = {0.7, 0.2, 0.3};
+                            #if 1
+                            const float<3> sun = max(dot(normal, sunDir), 0.0) * sunCol;
+                            const float<3> sky = clamp(0.5 + 0.5 * normal.y, 0.0, 1.0) * skyCol;
+                            const float<3> indirectMul = {-1.0,0.0,-1.0};
+                            const float<3> indirect = clamp(dot(normal, normalize(sunDir * indirectMul)), 0.0, 1.0) * indirectCol;
+                            const float shininess = 20.0f;
+                            const float energyConservation = (8.0f + shininess) / (8.0f * PI);
+                            const float<3> halfwayDir = normalize(sunDir + viewDir);
+                            const float specular = energyConservation * pow(max(dot(normal, halfwayDir), 0.0f), shininess);
+                            color *= indirect + sky + sun + specular;
+                            color *= 0.8f;
+                            #endif
+                            
+                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 0] = float_to_srgb8(color[0]);
+                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 1] = float_to_srgb8(color[1]);
+                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 2] = float_to_srgb8(color[2]);
                         }
                         //else framebufferColor[(x + y * frameSizeX) * 4 + 1] = 255;
                     }

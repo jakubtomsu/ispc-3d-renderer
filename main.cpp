@@ -52,7 +52,7 @@ struct Camera {
     Quat rot = QUAT_IDENTITY;
     float nearPlane = 0.005f;
     float farPlane = 1000.0f;
-    float fieldOfView = 110.0f;
+    float fieldOfView = 90.0f;
 };
 
 struct Context {
@@ -306,7 +306,7 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
     g_context.cursor = {(float)xpos, (float)ypos};
 
     Vec3 localMove = {};
-    const float speed = 0.1f * deltaTime * (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) ? 4.0f : 1.0f) *
+    const float speed = 0.4f * deltaTime * (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) ? 4.0f : 1.0f) *
                         (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) ? 0.25f : 1.0f);
     if (glfwGetKey(window, GLFW_KEY_W)) localMove.z -= speed;
     if (glfwGetKey(window, GLFW_KEY_S)) localMove.z += speed;
@@ -315,15 +315,14 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_E)) g_context.camera.pos.y += speed;
     if (glfwGetKey(window, GLFW_KEY_Q)) g_context.camera.pos.y -= speed;
 
-    g_context.cameraEuler.x -= mouseDelta.y * deltaTime * 0.25f;
-    g_context.cameraEuler.y -= mouseDelta.x * deltaTime * 0.25f;
+    g_context.cameraEuler.x -= mouseDelta.y * 0.005f;
+    g_context.cameraEuler.y -= mouseDelta.x * 0.005f;
     // g_context.cameraEuler.x = clamp(g_context.cameraEuler.x, -PI * 0.5f, PI * 0.5f);
 
     g_context.camera.rot = quatFromEuler(g_context.cameraEuler);
     g_context.camera.pos = vec3Add(g_context.camera.pos, quatMulVec3(g_context.camera.rot, localMove));
 
     if (glfwGetKey(window, GLFW_KEY_V)) g_context.enableWriteframe = !g_context.enableWriteframe;
-
     if (glfwGetKey(window, GLFW_KEY_C)) g_context.camera.fieldOfView -= 60.0f * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_Z)) g_context.camera.fieldOfView += 60.0f * deltaTime;
     g_context.camera.fieldOfView = clamp(g_context.camera.fieldOfView, 10.0f, 170.0f);
@@ -352,8 +351,6 @@ size_t loadModel(const char* path,
                     vertexBuffer[len + 3] = mesh->normals[3 * mi.n + 0];
                     vertexBuffer[len + 4] = mesh->normals[3 * mi.n + 1];
                     vertexBuffer[len + 5] = mesh->normals[3 * mi.n + 2];
-                    printf("normal %f %f %f\n", mesh->normals[3 * mi.n + 0], mesh->normals[3 * mi.n + 2],
-                           mesh->normals[3 * mi.n + 2]);
                     len += VERTEX_FLOATS;
                     assert(len < vertexBufferSize);
                 }
@@ -361,6 +358,7 @@ size_t loadModel(const char* path,
             }
         }
     }
+    fast_obj_destroy(mesh);
     return len;
 }
 
@@ -389,7 +387,7 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebufferSizeChangedGlfwCallback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSwapInterval(1);  //< V-Sync
+    glfwSwapInterval(0);  //< V-Sync
 
     changeFrameSize(startWindowX, startWindowY);
 
@@ -487,9 +485,11 @@ int main() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     }
 
-    static float vertexBuffer[1024 * 1024] = {};
+    static float vertexBuffer[1024 * 1024 * 20] = {};
     size_t vertexBufferLen = 0;
-    vertexBufferLen = loadModel("models/bunny.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
+    vertexBufferLen = loadModel("models/wattson.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
+
+    g_context.camera.pos = {-2, 1, 2};
 
     double prevTime = glfwGetTime();
     // render loop
@@ -530,7 +530,8 @@ int main() {
 
         const double renderBegin = glfwGetTime();
         ispc::renderFrame(g_context.framebufferColor, g_context.framebufferDepth, g_context.frameSizeX,
-                          g_context.frameSizeY, &vertexBuffer[0], vertexBufferLen, &transformMat4.elems[0]);
+                          g_context.frameSizeY, &vertexBuffer[0], vertexBufferLen, &transformMat4.elems[0],
+                          g_context.camera.pos.x, g_context.camera.pos.y, g_context.camera.pos.z);
         const double renderTime = glfwGetTime() - renderBegin;
 
         uploadFrameImageToGpu(frameTexture);
@@ -548,8 +549,9 @@ int main() {
         // Dump info
         {
             char infoBuf[512] = {};
-            snprintf(infoBuf, staticArrayLen(infoBuf), "dt:%fms fps:%i render:%fms x:%i y:%i", deltaTime * 1000.0f,
-                     (int)(1.0f / deltaTime), renderTime * 1000.0f, g_context.frameSizeX, g_context.frameSizeY);
+            snprintf(infoBuf, staticArrayLen(infoBuf), "dt:%fms fps:%i render:%fms x:%i y:%i vert:%ifloats",
+                     deltaTime * 1000.0f, (int)(1.0f / deltaTime), renderTime * 1000.0f, g_context.frameSizeX,
+                     g_context.frameSizeY, vertexBufferLen);
             puts(infoBuf);
             char titleBuf[1024] = {};
             sprintf(
