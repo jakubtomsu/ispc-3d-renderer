@@ -63,6 +63,7 @@ struct Context {
     Camera camera;
     Vec3 cameraEuler;
     Vec2 cursor;
+    bool enableWriteframe;
 };
 
 static Context g_context = {};
@@ -305,21 +306,27 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
     g_context.cursor = {(float)xpos, (float)ypos};
 
     Vec3 localMove = {};
-    const float speed = 0.5f * deltaTime * (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) ? 4.0f : 1.0f) *
+    const float speed = 0.1f * deltaTime * (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) ? 4.0f : 1.0f) *
                         (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) ? 0.25f : 1.0f);
-    if (glfwGetKey(window, GLFW_KEY_W)) localMove.z += speed;
-    if (glfwGetKey(window, GLFW_KEY_S)) localMove.z -= speed;
-    if (glfwGetKey(window, GLFW_KEY_A)) localMove.x += speed;
-    if (glfwGetKey(window, GLFW_KEY_D)) localMove.x -= speed;
+    if (glfwGetKey(window, GLFW_KEY_W)) localMove.z -= speed;
+    if (glfwGetKey(window, GLFW_KEY_S)) localMove.z += speed;
+    if (glfwGetKey(window, GLFW_KEY_A)) localMove.x -= speed;
+    if (glfwGetKey(window, GLFW_KEY_D)) localMove.x += speed;
     if (glfwGetKey(window, GLFW_KEY_E)) g_context.camera.pos.y += speed;
     if (glfwGetKey(window, GLFW_KEY_Q)) g_context.camera.pos.y -= speed;
 
     g_context.cameraEuler.x -= mouseDelta.y * deltaTime * 0.25f;
-    g_context.cameraEuler.y += mouseDelta.x * deltaTime * 0.25f;
+    g_context.cameraEuler.y -= mouseDelta.x * deltaTime * 0.25f;
     // g_context.cameraEuler.x = clamp(g_context.cameraEuler.x, -PI * 0.5f, PI * 0.5f);
 
     g_context.camera.rot = quatFromEuler(g_context.cameraEuler);
     g_context.camera.pos = vec3Add(g_context.camera.pos, quatMulVec3(g_context.camera.rot, localMove));
+
+    if (glfwGetKey(window, GLFW_KEY_V)) g_context.enableWriteframe = !g_context.enableWriteframe;
+
+    if (glfwGetKey(window, GLFW_KEY_C)) g_context.camera.fieldOfView -= 60.0f * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_Z)) g_context.camera.fieldOfView += 60.0f * deltaTime;
+    g_context.camera.fieldOfView = clamp(g_context.camera.fieldOfView, 10.0f, 170.0f);
 }
 
 // returns new vertexBufferLen
@@ -345,6 +352,8 @@ size_t loadModel(const char* path,
                     vertexBuffer[len + 3] = mesh->normals[3 * mi.n + 0];
                     vertexBuffer[len + 4] = mesh->normals[3 * mi.n + 1];
                     vertexBuffer[len + 5] = mesh->normals[3 * mi.n + 2];
+                    printf("normal %f %f %f\n", mesh->normals[3 * mi.n + 0], mesh->normals[3 * mi.n + 2],
+                           mesh->normals[3 * mi.n + 2]);
                     len += VERTEX_FLOATS;
                     assert(len < vertexBufferSize);
                 }
@@ -484,11 +493,13 @@ int main() {
 
     double prevTime = glfwGetTime();
     // render loop
+    uint64_t frameIndex = 0;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         const double currentTime = glfwGetTime();
         const float deltaTime = clamp(currentTime - prevTime, 0.001f, 0.1f);
         prevTime = currentTime;
+        frameIndex++;
 
         processInput(window, deltaTime);
 
@@ -535,9 +546,19 @@ int main() {
         glfwSwapBuffers(window);
 
         // Dump info
-        printf("[Frame] dt:%fms fps:%i render:%fms x:%i y:%i mem:%ib ptr:%p\n", deltaTime * 1000.0f,
-               (int)(1.0f / deltaTime), renderTime * 1000.0f, g_context.frameSizeX, g_context.frameSizeY,
-               getFrameImageSizeInBytes(), g_context.framebufferColor);
+        {
+            char infoBuf[512] = {};
+            snprintf(infoBuf, staticArrayLen(infoBuf), "dt:%fms fps:%i render:%fms x:%i y:%i", deltaTime * 1000.0f,
+                     (int)(1.0f / deltaTime), renderTime * 1000.0f, g_context.frameSizeX, g_context.frameSizeY);
+            puts(infoBuf);
+            char titleBuf[1024] = {};
+            sprintf(
+                titleBuf,
+                "ISPC Triangle Renderer  [%s] Controls: Move with WASD and Q/E, toggle wireframe with V, Change FOV "
+                "with C/Z",
+                infoBuf);
+            if ((frameIndex % 16) == 0) glfwSetWindowTitle(window, titleBuf);
+        }
     }
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
