@@ -1,3 +1,5 @@
+#include "common.h"
+
 // https://fgiesen.wordpress.com/2013/02/08/triangle-rasterization-in-practice/
 // https://fgiesen.wordpress.com/2013/02/10/optimizing-the-basic-rasterizer/
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/perspective-correct-interpolation-vertex-attributes
@@ -18,17 +20,14 @@ inline float edgeFunc(const float<3>& a, const float<3>& b, const float<3>& c) {
     return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
 }
 
-#define MAX_CLIPPED_TRIANGLES 2
-#define BYTES_PER_PIXEL 4
-
-inline void setPixel(uniform uint8 outFrame[], const int frameSizeX, const int x, const int y, const uint8<3> color) {
-    const int index = (x + y * frameSizeX) * BYTES_PER_PIXEL;
-    outFrame[index + 0] = color.r;
-    outFrame[index + 1] = color.g;
-    outFrame[index + 2] = color.b;
+inline void setPixel(uniform uint8 framebufferColor[], const int frameSizeX, const int x, const int y, const uint8<3> color) {
+    const int index = (x + y * frameSizeX) * FRAMEBUFFER_COLOR_BYTES;
+    framebufferColor[index + 0] = color.r;
+    framebufferColor[index + 1] = color.g;
+    framebufferColor[index + 2] = color.b;
 }
 
-void drawLine(uniform uint8 outFrame[],
+void drawLine(uniform uint8 framebufferColor[],
               const int frameSizeX, const int frameSizeY,
               int ax, int ay, int bx, int by,
               const uint8<3> color) {
@@ -59,7 +58,7 @@ void drawLine(uniform uint8 outFrame[],
 		for(int x = xmin; x <= xmax; x++) {
 			int y = ay + (int)((float)(x - ax) * slope);
             if(y >= 0 && y < frameSizeY) {
-			    setPixel(outFrame, frameSizeX, x, y, color);
+			    setPixel(framebufferColor, frameSizeX, x, y, color);
             }
 		}
 	} else {
@@ -82,29 +81,31 @@ void drawLine(uniform uint8 outFrame[],
 		for(int y = ymin; y <= ymax; y++) {
 			int x = ax + (int)((float)(y - ay) * slope);
             if(x >= 0 && x < frameSizeX) {
-			    setPixel(outFrame, frameSizeX, x, y, color);
+			    setPixel(framebufferColor, frameSizeX, x, y, color);
             }
 		}
 	}
 }
 
-export void renderFrame(uniform uint8 outFrame[],
+export void renderFrame(uniform uint8 framebufferColor[],
+                        uniform uint16 framebufferDepth[],
                         const uniform int frameSizeX, const uniform int frameSizeY,
                         const uniform float pointData[], const uniform int pointNum,
                         const uniform float transformMat4[4][4]) {
-    memset(outFrame, 66, frameSizeX * frameSizeY * BYTES_PER_PIXEL);
+    memset(framebufferColor, 42, frameSizeX * frameSizeY * FRAMEBUFFER_COLOR_BYTES);
+    memset(framebufferDepth, 0, frameSizeX * frameSizeY * FRAMEBUFFER_DEPTH_BYTES);
     
     const uint8<3> lineCol = {77, 77, 77};
-    drawLine(outFrame, frameSizeX, frameSizeY, 0, 0, frameSizeX, frameSizeY, lineCol);
-    drawLine(outFrame, frameSizeX, frameSizeY, frameSizeX, 0, 0, frameSizeY, lineCol);
-                            
+    drawLine(framebufferColor, frameSizeX, frameSizeY, 0, 0, frameSizeX, frameSizeY, lineCol);
+    drawLine(framebufferColor, frameSizeX, frameSizeY, frameSizeX, 0, 0, frameSizeY, lineCol);
+
     // Render Geometry
-    for(int pointIndex = 0; pointIndex < pointNum; pointIndex += 3 * 3) {
+    for(int pointIndex = 0; pointIndex < pointNum; pointIndex += VERTEX_FLOATS * 3) {
         // Load vertex data
         float<4> positions[3] = {
             {pointData[pointIndex + 0], pointData[pointIndex + 1], pointData[pointIndex + 2], 1.0f},
-            {pointData[pointIndex + 3], pointData[pointIndex + 4], pointData[pointIndex + 5], 1.0f},
             {pointData[pointIndex + 6], pointData[pointIndex + 7], pointData[pointIndex + 8], 1.0f},
+            {pointData[pointIndex + 12], pointData[pointIndex + 13], pointData[pointIndex + 14], 1.0f},
         };
 
         float<4> transformedPositions[3];
@@ -118,34 +119,14 @@ export void renderFrame(uniform uint8 outFrame[],
                 }
                 transformedPositions[v][row] = sum;
             }
-            screenPositonClipZ[v] = transformedPositions[v].z;
+            
             transformedPositions[v].x /= transformedPositions[v].w;
             transformedPositions[v].y /= transformedPositions[v].w;
             transformedPositions[v].z /= transformedPositions[v].w;
+            screenPositonClipZ[v] = transformedPositions[v].z;
         }
-        
-        // Clip triangles
-        // Note: this clips only agains the near plane.
-        float<4> clipped[MAX_CLIPPED_TRIANGLES * 3];
-        int clippedNum = 0;
-        {
-            const float<3> d = screenPositonClipZ;
-            const float plane = 0.0f;
-            const int numPositive = (d[0] > plane ? 1 : 0) + (d[1] > plane ? 1 : 0) + (d[1] > plane ? 1 : 0);
-            if(numPositive == 3) {
-                // use the full triangle
-                clipped[0] = transformedPositions[0];
-                clipped[1] = transformedPositions[1];
-                clipped[2] = transformedPositions[2];
-                clippedNum = 3;
-            } else if(numPositive == 0) {
-                continue;
-            } else if(numPositive == 1) {
-                continue;
-            } else { //< Only one negative
-                continue;
-            }
-        }
+
+        // TODO: clip triangles based on view Z        
         
         // Transform into pixel positions
         const int<2> v0 = {
@@ -211,12 +192,21 @@ export void renderFrame(uniform uint8 outFrame[],
                     const float r = (w0a * col0[0] + w1a * col1[0] + w2a * col2[0]) * z;
                     const float g = (w0a * col0[1] + w1a * col1[1] + w2a * col2[1]) * z;
                     const float b = (w0a * col0[2] + w1a * col1[2] + w2a * col2[2]) * z;
-                    // const float oneOverZ = w0a * screenPositonClipZ[0] + w1a * screenPositonClipZ[1] + w2a * screenPositonClipZ[2];
-                    // if(z > 0.0f) {
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 0] = r;
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 1] = clamp(oneOverZ * 0.0000001f, 0.0f, 255.0f);
-                    outFrame[(p.x + p.y * frameSizeX) * 4 + 2] = clamp(oneOverZ * 0.0000001f, 0.0f, 255.0f);
-                    // } else outFrame[(p.x + p.y * frameSizeX) * 4 + 0] = 255;
+                    const float depth = 
+                        (w0a * transformedPositions[0].z / transformedPositions[0].w +
+                        w1a * transformedPositions[1].z / transformedPositions[1].w +
+                        w2a * transformedPositions[2].z / transformedPositions[2].w) * z;
+                    
+                    if(depth > 0.0f) {
+                        const int index = p.x + p.y * frameSizeX;
+                        const uint16 prevDepth = framebufferDepth[index];
+                        if(depth > prevDepth) {
+                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 0] = clamp(depth * 10.0f, 0.0f, 255.0f);
+                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 1] = clamp(depth * 10.0f, 0.0f, 255.0f);
+                            framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 2] = clamp(depth * 10.0f, 0.0f, 255.0f);
+                            framebufferDepth[index] = depth;
+                        }
+                    } else framebufferColor[(p.x + p.y * frameSizeX) * 4 + 0] = 255;
                 }
                 
                 // One step to the right
@@ -232,8 +222,8 @@ export void renderFrame(uniform uint8 outFrame[],
         }
     
         const uint8<3> triLineCol = {255, 255, 255};
-        // drawLine(outFrame, frameSizeX, frameSizeY, v0.x, v0.y, v1.x, v1.y, triLineCol);
-        // drawLine(outFrame, frameSizeX, frameSizeY, v1.x, v1.y, v2.x, v2.y, triLineCol);
-        // drawLine(outFrame, frameSizeX, frameSizeY, v2.x, v2.y, v0.x, v0.y, triLineCol);
+        // drawLine(framebufferColor, frameSizeX, frameSizeY, v0.x, v0.y, v1.x, v1.y, triLineCol);
+        // drawLine(framebufferColor, frameSizeX, frameSizeY, v1.x, v1.y, v2.x, v2.y, triLineCol);
+        // drawLine(framebufferColor, frameSizeX, frameSizeY, v2.x, v2.y, v0.x, v0.y, triLineCol);
     }
 }

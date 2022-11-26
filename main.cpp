@@ -9,6 +9,7 @@
 #include "renderer_ispc.h"
 #define FAST_OBJ_IMPLEMENTATION
 #include "fast_obj.h"
+#include "common.h"
 
 #define staticArrayLen(arr) (sizeof(arr) / sizeof(arr[0]))
 #define PI 3.14159265359f
@@ -57,17 +58,17 @@ struct Camera {
 struct Context {
     int frameSizeX;
     int frameSizeY;
-    uint8_t* frameImage;
+    uint8_t* framebufferColor;
+    uint16_t* framebufferDepth;
     Camera camera;
     Vec3 cameraEuler;
     Vec2 cursor;
 };
 
 static Context g_context = {};
-#define FRAME_IMAGE_PIXEL_BYTES 4
 
 static size_t getFrameImageSizeInBytes() {
-    return FRAME_IMAGE_PIXEL_BYTES * g_context.frameSizeX * g_context.frameSizeY;
+    return FRAMEBUFFER_COLOR_BYTES * g_context.frameSizeX * g_context.frameSizeY;
 }
 
 static void changeFrameSize(const int x, const int y) {
@@ -79,11 +80,13 @@ static void changeFrameSize(const int x, const int y) {
     }
     g_context.frameSizeX = x;
     g_context.frameSizeY = y;
-    if (g_context.frameImage != nullptr) {
-        free(g_context.frameImage);
-    }
-    g_context.frameImage = (uint8_t*)malloc(getFrameImageSizeInBytes());
-    assert(g_context.frameImage != nullptr);
+    if (g_context.framebufferColor != nullptr) free(g_context.framebufferColor);
+    if (g_context.framebufferDepth != nullptr) free(g_context.framebufferDepth);
+    g_context.framebufferColor = (uint8_t*)malloc(getFrameImageSizeInBytes());
+    g_context.framebufferDepth =
+        (uint16_t*)malloc(FRAMEBUFFER_DEPTH_BYTES * g_context.frameSizeX * g_context.frameSizeY);
+    assert(g_context.framebufferColor != nullptr);
+    assert(g_context.framebufferDepth != nullptr);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -107,7 +110,7 @@ static void GLAPIENTRY debugMessageOpenglCallback(GLenum source,
 static void uploadFrameImageToGpu(GLuint texture) {
     glBindTexture(GL_TEXTURE_2D, texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_context.frameSizeX, g_context.frameSizeY, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 g_context.frameImage);
+                 g_context.framebufferColor);
 }
 
 static inline uint8_t floatToUNorm8(const float value) {
@@ -116,12 +119,12 @@ static inline uint8_t floatToUNorm8(const float value) {
 
 static void renderFrameCpp() {
     const float time = glfwGetTime();
-    assert(g_context.frameImage != nullptr);
+    assert(g_context.framebufferColor != nullptr);
     const int frameSizeX = g_context.frameSizeX;
     const int frameSizeY = g_context.frameSizeY;
     for (int x = 0; x < frameSizeX; x++) {
         for (int y = 0; y < frameSizeY; y++) {
-            g_context.frameImage[(x + y * frameSizeX) * FRAME_IMAGE_PIXEL_BYTES] =
+            g_context.framebufferColor[(x + y * frameSizeX) * FRAMEBUFFER_COLOR_BYTES] =
                 floatToUNorm8((float)x / (float)frameSizeX + time);
         }
     }
@@ -240,10 +243,10 @@ Mat4 mat4Mul(const Mat4 left, const Mat4 right) {
     return result;
 }
 
-static Mat4 mat4Perspective(const float fov, const float aspectRatioYOverX, const float near, const float far) {
+static Mat4 mat4Perspective(const float fov, const float aspectRatioXOverY, const float near, const float far) {
     Mat4 result = {};
     const float cotangent = 1.0f / tanf(fov * (PI / 360.0f));
-    const float a = cotangent / aspectRatioYOverX;
+    const float a = cotangent / aspectRatioXOverY;
     const float b = cotangent;
     const float c = (near + far) / (near - far);
     const float d = (2.0f * near * far) / (near - far);
@@ -311,8 +314,8 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_E)) g_context.camera.pos.y += speed;
     if (glfwGetKey(window, GLFW_KEY_Q)) g_context.camera.pos.y -= speed;
 
-    g_context.cameraEuler.x -= mouseDelta.y * deltaTime * 1.0f;
-    g_context.cameraEuler.y += mouseDelta.x * deltaTime * 1.0f;
+    g_context.cameraEuler.x -= mouseDelta.y * deltaTime * 0.25f;
+    g_context.cameraEuler.y += mouseDelta.x * deltaTime * 0.25f;
     // g_context.cameraEuler.x = clamp(g_context.cameraEuler.x, -PI * 0.5f, PI * 0.5f);
 
     g_context.camera.rot = quatFromEuler(g_context.cameraEuler);
@@ -339,7 +342,10 @@ size_t loadModel(const char* path,
                     vertexBuffer[len + 0] = offset.elems[0] + mesh->positions[3 * mi.p + 0];
                     vertexBuffer[len + 1] = offset.elems[1] + mesh->positions[3 * mi.p + 1];
                     vertexBuffer[len + 2] = offset.elems[2] + mesh->positions[3 * mi.p + 2];
-                    len += 3;
+                    vertexBuffer[len + 3] = mesh->normals[3 * mi.n + 0];
+                    vertexBuffer[len + 4] = mesh->normals[3 * mi.n + 1];
+                    vertexBuffer[len + 5] = mesh->normals[3 * mi.n + 2];
+                    len += VERTEX_FLOATS;
                     assert(len < vertexBufferSize);
                 }
                 idx++;
@@ -497,7 +503,7 @@ int main() {
         g_context.camera.rot = quatNormalize(g_context.camera.rot);
 
         // Clear framebuffer
-        // memset(g_context.frameImage, 0, getFrameImageSizeInBytes());
+        // memset(g_context.framebufferColor, 0, getFrameImageSizeInBytes());
 
         // renderFrameCpp();
         // clang-format off
@@ -512,8 +518,8 @@ int main() {
         const Mat4 transformMat4 = calcCameraMatrix(g_context.camera);
 
         const double renderBegin = glfwGetTime();
-        ispc::renderFrame(g_context.frameImage, g_context.frameSizeX, g_context.frameSizeY, &vertexBuffer[0],
-                          vertexBufferLen, &transformMat4.elems[0]);
+        ispc::renderFrame(g_context.framebufferColor, g_context.framebufferDepth, g_context.frameSizeX,
+                          g_context.frameSizeY, &vertexBuffer[0], vertexBufferLen, &transformMat4.elems[0]);
         const double renderTime = glfwGetTime() - renderBegin;
 
         uploadFrameImageToGpu(frameTexture);
@@ -531,7 +537,7 @@ int main() {
         // Dump info
         printf("[Frame] dt:%fms fps:%i render:%fms x:%i y:%i mem:%ib ptr:%p\n", deltaTime * 1000.0f,
                (int)(1.0f / deltaTime), renderTime * 1000.0f, g_context.frameSizeX, g_context.frameSizeY,
-               getFrameImageSizeInBytes(), g_context.frameImage);
+               getFrameImageSizeInBytes(), g_context.framebufferColor);
     }
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
