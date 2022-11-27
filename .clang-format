@@ -1,12 +1,32 @@
+---
 BasedOnStyle: Chromium
 ColumnLimit: 120
+AllowShortFunctionsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
 UseTab: Never
 IndentWidth: 4
 TabWidth: 4
 ContinuationIndentWidth: 4
+MaxEmptyLinesToKeep: 3
+SortIncludes: false
 PointerAlignment: Left
+BreakBeforeBinaryOperators: false
 Cpp11BracedListStyle: true
 SpaceBeforeCpp11BracedList: false
+AlignAfterOpenBracket: AlwaysBreak
+AlignConsecutiveDeclarations: false
+AlignConsecutiveAssignments: false
+AlignArrayOfStructures: None
+AlignConsecutiveMacros: Consecutive
+BinPackArguments: false
+BinPackParameters: false
+IndentCaseLabels: false
+SpacesBeforeTrailingComments: 1
+IndentPPDirectives: BeforeHash
+SpaceBeforeParens: Never
+SeparateDefinitionBlocks: Leave
+SpaceAfterTemplateKeyword: false
 AccessModifierOffset: -4
-SortIncludes: false
-AllowShortIfStatementsOnASingleLine : true
+IndentPPDirectives: None

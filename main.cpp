@@ -1,18 +1,19 @@
-#include <stdint.h>
-#include <stdio.h>  // printf
 #include <assert.h>
-#include <stdlib.h>  // malloc
-#include <string.h>  // memset
-#include <math.h>    // sqrt
 #include <glad/glad.h>
 #include <glfw/glfw3.h>
+#include <math.h> // sqrt
+#include <stdint.h>
+#include <stdio.h>  // printf
+#include <stdlib.h> // malloc
+#include <string.h> // memset
 #include "renderer_ispc.h"
+#include "common.h"
 #define FAST_OBJ_IMPLEMENTATION
 #include "fast_obj.h"
-#include "common.h"
+
 
 #define staticArrayLen(arr) (sizeof(arr) / sizeof(arr[0]))
-#define PI 3.14159265359f
+#define PI                  3.14159265359f
 
 union Vec2 {
     float elems[2];
@@ -36,10 +37,8 @@ union Vec4 {
 };
 
 typedef Vec4 Quat;
-#define QUAT_IDENTITY          \
-    Quat {                     \
-        0.0f, 0.0f, 0.0f, 1.0f \
-    }
+#define QUAT_IDENTITY \
+    Quat { 0.0f, 0.0f, 0.0f, 1.0f }
 
 // 4x4 column-major matrix
 union Mat4 {
@@ -73,16 +72,16 @@ static size_t getFrameImageSizeInBytes() {
 }
 
 static void changeFrameSize(const int x, const int y) {
-    if (x <= 0 || y <= 0) {
+    if(x <= 0 || y <= 0) {
         return;
     }
-    if (x == g_context.frameSizeX && y == g_context.frameSizeY) {
+    if(x == g_context.frameSizeX && y == g_context.frameSizeY) {
         return;
     }
     g_context.frameSizeX = x;
     g_context.frameSizeY = y;
-    if (g_context.framebufferColor != nullptr) free(g_context.framebufferColor);
-    if (g_context.framebufferDepth != nullptr) free(g_context.framebufferDepth);
+    if(g_context.framebufferColor != nullptr) free(g_context.framebufferColor);
+    if(g_context.framebufferDepth != nullptr) free(g_context.framebufferDepth);
     g_context.framebufferColor = (uint8_t*)malloc(getFrameImageSizeInBytes());
     g_context.framebufferDepth =
         (uint16_t*)malloc(FRAMEBUFFER_DEPTH_BYTES * g_context.frameSizeX * g_context.frameSizeY);
@@ -90,41 +89,54 @@ static void changeFrameSize(const int x, const int y) {
     assert(g_context.framebufferDepth != nullptr);
 }
 
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
+// glfw: whenever the window size changed (by OS or user resize) this callback
+// function executes
 static void framebufferSizeChangedGlfwCallback(GLFWwindow* window, int width, int height) {
-    // make sure the viewport matches the new window dimensions; note that width and
-    // height will be significantly larger than specified on retina displays.
+    // make sure the viewport matches the new window dimensions; note that width
+    // and height will be significantly larger than specified on retina
+    // displays.
     glViewport(0, 0, width, height);
 }
 
-static void GLAPIENTRY debugMessageOpenglCallback(GLenum source,
-                                                  GLenum type,
-                                                  GLuint id,
-                                                  GLenum severity,
-                                                  GLsizei length,
-                                                  const GLchar* message,
-                                                  const void* userParam) {
-    printf("[OpenGl Error]: %s type = 0x%x, severity = 0x%x, message = %s\n",
-           (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), type, severity, message);
+static void GLAPIENTRY debugMessageOpenglCallback(
+    GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei length,
+    const GLchar* message,
+    const void* userParam) {
+    printf(
+        "[OpenGl Error]: %s type = 0x%x, severity = 0x%x, message = %s\n",
+        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+        type,
+        severity,
+        message);
 }
 
 static void uploadFrameImageToGpu(GLuint texture) {
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_context.frameSizeX, g_context.frameSizeY, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 g_context.framebufferColor);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        g_context.frameSizeX,
+        g_context.frameSizeY,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        g_context.framebufferColor);
 }
 
-static inline uint8_t floatToUNorm8(const float value) {
-    return (uint8_t)(value * 255.0f);
-}
+static inline uint8_t floatToUNorm8(const float value) { return (uint8_t)(value * 255.0f); }
 
 static void renderFrameCpp() {
     const float time = glfwGetTime();
     assert(g_context.framebufferColor != nullptr);
     const int frameSizeX = g_context.frameSizeX;
     const int frameSizeY = g_context.frameSizeY;
-    for (int x = 0; x < frameSizeX; x++) {
-        for (int y = 0; y < frameSizeY; y++) {
+    for(int x = 0; x < frameSizeX; x++) {
+        for(int y = 0; y < frameSizeY; y++) {
             g_context.framebufferColor[(x + y * frameSizeX) * FRAMEBUFFER_COLOR_BYTES] =
                 floatToUNorm8((float)x / (float)frameSizeX + time);
         }
@@ -132,13 +144,13 @@ static void renderFrameCpp() {
 }
 
 static Vec3 vec3Cross(const Vec3 left, const Vec3 right) {
-    return {(left.y * right.z) - (left.z * right.y), (left.z * right.x) - (left.x * right.z),
-            (left.x * right.y) - (left.y * right.x)};
+    return {
+        (left.y * right.z) - (left.z * right.y),
+        (left.z * right.x) - (left.x * right.z),
+        (left.x * right.y) - (left.y * right.x)};
 }
 
-static Vec3 vec3MulF(const Vec3 v, const float f) {
-    return {v.x * f, v.y * f, v.z * f};
-}
+static Vec3 vec3MulF(const Vec3 v, const float f) { return {v.x * f, v.y * f, v.z * f}; }
 
 static Vec3 vec3Add(const Vec3 left, const Vec3 right) {
     return {left.x + right.x, left.y + right.y, left.z + right.z};
@@ -153,9 +165,7 @@ static Vec3 quatMulVec3(const Quat q, const Vec3 v) {
     return vec3Add(vec3Add(v, vec3MulF(t, q.w)), vec3Cross({q.x, q.y, q.z}, t));
 }
 
-static Quat quatDivF(const Quat q, const float f) {
-    return {q.x / f, q.y / f, q.z / f, q.w / f};
-}
+static Quat quatDivF(const Quat q, const float f) { return {q.x / f, q.y / f, q.z / f, q.w / f}; }
 
 static Quat quatNormalize(const Quat q) {
     const float len = sqrtf(quatDot(q, q));
@@ -171,8 +181,7 @@ static Quat quatInv(const Quat left) {
 static Quat quatFromAxisAngle(const Vec3 axis, const float angle) {
     const float rotSin = sinf(angle * 0.5f);
     Quat result;
-    for (int i = 0; i < 3; i++)
-        result.elems[i] = axis.elems[i] * rotSin;
+    for(int i = 0; i < 3; i++) result.elems[i] = axis.elems[i] * rotSin;
     result.w = cosf(angle * 0.5f);
     return result;
 }
@@ -231,10 +240,10 @@ static Mat4 quatToMat4(const Quat q) {
 
 Mat4 mat4Mul(const Mat4 left, const Mat4 right) {
     Mat4 result;
-    for (int columns = 0; columns < 4; ++columns) {
-        for (int rows = 0; rows < 4; ++rows) {
+    for(int columns = 0; columns < 4; ++columns) {
+        for(int rows = 0; rows < 4; ++rows) {
             float sum = 0;
-            for (int currentMatrix = 0; currentMatrix < 4; ++currentMatrix) {
+            for(int currentMatrix = 0; currentMatrix < 4; ++currentMatrix) {
                 sum += left.elems[currentMatrix][rows] * right.elems[columns][currentMatrix];
             }
             result.elems[columns][rows] = sum;
@@ -275,27 +284,30 @@ static Mat4 calcCameraMatrix(const Camera& camera) {
     // Apply inverse rotation
     view = mat4Mul(quatToMat4(quatInv(camera.rot)), view);
 
-    const Mat4 perspective =
-        mat4Perspective(camera.fieldOfView, (float)g_context.frameSizeX / (float)g_context.frameSizeY, camera.nearPlane,
-                        camera.farPlane);
+    const Mat4 perspective = mat4Perspective(
+        camera.fieldOfView,
+        (float)g_context.frameSizeX / (float)g_context.frameSizeY,
+        camera.nearPlane,
+        camera.farPlane);
 
     // return view;
     return mat4Mul(perspective, view);
 }
 
 static inline float clamp(const float value, const float minValue, const float maxValue) {
-    if (value < minValue) {
+    if(value < minValue) {
         return minValue;
     }
-    if (value > maxValue) {
+    if(value > maxValue) {
         return maxValue;
     }
     return value;
 }
 
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
+// process all input: query GLFW whether relevant keys are pressed/released this
+// frame and react accordingly
 static void processInput(GLFWwindow* window, const float deltaTime) {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
+    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
 
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
@@ -305,15 +317,16 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
     };
     g_context.cursor = {(float)xpos, (float)ypos};
 
+    // Move
     Vec3 localMove = {};
     const float speed = 0.4f * deltaTime * (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) ? 4.0f : 1.0f) *
                         (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) ? 0.25f : 1.0f);
-    if (glfwGetKey(window, GLFW_KEY_W)) localMove.z -= speed;
-    if (glfwGetKey(window, GLFW_KEY_S)) localMove.z += speed;
-    if (glfwGetKey(window, GLFW_KEY_A)) localMove.x -= speed;
-    if (glfwGetKey(window, GLFW_KEY_D)) localMove.x += speed;
-    if (glfwGetKey(window, GLFW_KEY_E)) g_context.camera.pos.y += speed;
-    if (glfwGetKey(window, GLFW_KEY_Q)) g_context.camera.pos.y -= speed;
+    if(glfwGetKey(window, GLFW_KEY_W)) localMove.z -= speed;
+    if(glfwGetKey(window, GLFW_KEY_S)) localMove.z += speed;
+    if(glfwGetKey(window, GLFW_KEY_A)) localMove.x -= speed;
+    if(glfwGetKey(window, GLFW_KEY_D)) localMove.x += speed;
+    if(glfwGetKey(window, GLFW_KEY_E)) g_context.camera.pos.y += speed;
+    if(glfwGetKey(window, GLFW_KEY_Q)) g_context.camera.pos.y -= speed;
 
     g_context.cameraEuler.x -= mouseDelta.y * 0.005f;
     g_context.cameraEuler.y -= mouseDelta.x * 0.005f;
@@ -322,29 +335,40 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
     g_context.camera.rot = quatFromEuler(g_context.cameraEuler);
     g_context.camera.pos = vec3Add(g_context.camera.pos, quatMulVec3(g_context.camera.rot, localMove));
 
-    if (glfwGetKey(window, GLFW_KEY_V)) g_context.enableWriteframe = !g_context.enableWriteframe;
-    if (glfwGetKey(window, GLFW_KEY_C)) g_context.camera.fieldOfView -= 60.0f * deltaTime;
-    if (glfwGetKey(window, GLFW_KEY_Z)) g_context.camera.fieldOfView += 60.0f * deltaTime;
+    // Wireframe
+    g_context.enableWriteframe = false;
+    if(glfwGetKey(window, GLFW_KEY_V)) g_context.enableWriteframe = true;
+
+    // Zoom
+    if(glfwGetKey(window, GLFW_KEY_C)) g_context.camera.fieldOfView -= 60.0f * deltaTime;
+    if(glfwGetKey(window, GLFW_KEY_Z)) g_context.camera.fieldOfView += 60.0f * deltaTime;
     g_context.camera.fieldOfView = clamp(g_context.camera.fieldOfView, 10.0f, 170.0f);
+
+    // Reset
+    if(glfwGetKey(window, GLFW_KEY_R)) {
+        g_context.camera.pos = {0, 0, 0};
+        g_context.camera.rot = QUAT_IDENTITY;
+    }
 }
 
 // returns new vertexBufferLen
-size_t loadModel(const char* path,
-                 float* vertexBuffer,
-                 const size_t vertexBufferLen,
-                 const size_t vertexBufferSize,
-                 const Vec3 offset = {}) {
+size_t loadModel(
+    const char* path,
+    float* vertexBuffer,
+    const size_t vertexBufferLen,
+    const size_t vertexBufferSize,
+    const Vec3 offset = {}) {
     fastObjMesh* mesh = fast_obj_read(path);
     assert(mesh);
     size_t len = vertexBufferLen;
-    for (unsigned int ii = 0; ii < mesh->group_count; ii++) {
+    for(unsigned int ii = 0; ii < mesh->group_count; ii++) {
         const fastObjGroup& grp = mesh->groups[ii];
         int idx = 0;
-        for (unsigned int jj = 0; jj < grp.face_count; jj++) {
+        for(unsigned int jj = 0; jj < grp.face_count; jj++) {
             unsigned int fv = mesh->face_vertices[grp.face_offset + jj];
-            for (unsigned int kk = 0; kk < fv; kk++) {
+            for(unsigned int kk = 0; kk < fv; kk++) {
                 fastObjIndex mi = mesh->indices[grp.index_offset + idx];
-                if (mi.p) {
+                if(mi.p) {
                     vertexBuffer[len + 0] = offset.elems[0] + mesh->positions[3 * mi.p + 0];
                     vertexBuffer[len + 1] = offset.elems[1] + mesh->positions[3 * mi.p + 1];
                     vertexBuffer[len + 2] = offset.elems[2] + mesh->positions[3 * mi.p + 2];
@@ -379,7 +403,7 @@ int main() {
     const int startWindowY = 600;
     // glfw window creation
     GLFWwindow* window = glfwCreateWindow(startWindowX, startWindowY, "ISPC software rasterizer", nullptr, nullptr);
-    if (window == nullptr) {
+    if(window == nullptr) {
         printf("[glfwCreateWindow] Failed to open a window.");
         glfwTerminate();
         return -1;
@@ -387,12 +411,12 @@ int main() {
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebufferSizeChangedGlfwCallback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSwapInterval(0);  //< V-Sync
+    glfwSwapInterval(0); //< V-Sync
 
     changeFrameSize(startWindowX, startWindowY);
 
     // glad: load all OpenGL function pointers
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         printf("[gladLoadGLLoader] Failed to load OpenGl function pointers.");
         return -1;
     }
@@ -428,7 +452,7 @@ int main() {
         glShaderSource(vertShader, 1, &vertSource, nullptr);
         glCompileShader(vertShader);
         glGetShaderiv(vertShader, GL_COMPILE_STATUS, &success);
-        if (!success) {
+        if(!success) {
             glGetShaderInfoLog(vertShader, staticArrayLen(infoLog), nullptr, infoLog);
             printf("[glCompileShader] Vertex Shader Error: %s", infoLog);
             assert(false);
@@ -437,7 +461,7 @@ int main() {
         GLint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragShader, 1, &fragSource, nullptr);
         glCompileShader(fragShader);
-        if (!success) {
+        if(!success) {
             glGetShaderInfoLog(fragShader, staticArrayLen(infoLog), nullptr, infoLog);
             printf("[glCompileShader] Vertex Shader Error: %s", infoLog);
             assert(false);
@@ -448,7 +472,7 @@ int main() {
         glAttachShader(shaderProgram, fragShader);
         glLinkProgram(shaderProgram);
         glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-        if (!success) {
+        if(!success) {
             glGetProgramInfoLog(shaderProgram, staticArrayLen(infoLog), nullptr, infoLog);
             printf("[glLinkProgram] Couldn't link the shader program: %s", infoLog);
             assert(false);
@@ -462,7 +486,18 @@ int main() {
     GLuint quadVao;
     {
         float quadVerts[] = {
-            -1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f,
+            -1.0f,
+            -1.0f,
+            1.0f,
+            -1.0f,
+            -1.0f,
+            1.0f,
+            -1.0f,
+            1.0f,
+            1.0f,
+            -1.0f,
+            1.0f,
+            1.0f,
         };
 
         glGenVertexArrays(1, &quadVao);
@@ -492,9 +527,10 @@ int main() {
     g_context.camera.pos = {-2, 1, 2};
 
     double prevTime = glfwGetTime();
+
     // render loop
     uint64_t frameIndex = 0;
-    while (!glfwWindowShouldClose(window)) {
+    while(!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         const double currentTime = glfwGetTime();
         const float deltaTime = clamp(currentTime - prevTime, 0.001f, 0.1f);
@@ -507,36 +543,32 @@ int main() {
         int currentWindowY = 0;
         glfwGetWindowSize(window, &currentWindowX, &currentWindowY);
 
-        if (g_context.frameSizeX != currentWindowX || g_context.frameSizeY != currentWindowY) {
+        if(g_context.frameSizeX != currentWindowX || g_context.frameSizeY != currentWindowY) {
             changeFrameSize(currentWindowX, currentWindowY);
         }
 
         g_context.camera.rot = quatNormalize(g_context.camera.rot);
-
-        // Clear framebuffer
-        // memset(g_context.framebufferColor, 0, getFrameImageSizeInBytes());
-
-        // renderFrameCpp();
-        // clang-format off
-        const float points[] = {
-            0, 0, 2,  0, 1, 2,  1, 0, 2,
-            0, 0,-2,  0, 1,-2,  1, 0,-2,
-            
-            //  2, 0, 0,  2, 1, 0,  2, 0, 1,
-            // -2, 0, 0, -2, 1, 0, -2, 0, 1,
-        };
-        // clang-format on
         const Mat4 transformMat4 = calcCameraMatrix(g_context.camera);
 
         const double renderBegin = glfwGetTime();
-        ispc::renderFrame(g_context.framebufferColor, g_context.framebufferDepth, g_context.frameSizeX,
-                          g_context.frameSizeY, &vertexBuffer[0], vertexBufferLen, &transformMat4.elems[0],
-                          g_context.camera.pos.x, g_context.camera.pos.y, g_context.camera.pos.z);
+        ispc::renderFrame(
+            g_context.framebufferColor,
+            g_context.framebufferDepth,
+            g_context.frameSizeX,
+            g_context.frameSizeY,
+            &vertexBuffer[0],
+            vertexBufferLen,
+            &transformMat4.elems[0],
+            g_context.camera.pos.x,
+            g_context.camera.pos.y,
+            g_context.camera.pos.z,
+            g_context.enableWriteframe);
         const double renderTime = glfwGetTime() - renderBegin;
 
         uploadFrameImageToGpu(frameTexture);
 
-        // Finish the rendering on the GPU - just draws a quad with the texture on it
+        // Finish the rendering on the GPU - just draws a quad with the texture
+        // on it
         glUseProgram(shaderProgram);
         glBindVertexArray(quadVao);
         glActiveTexture(GL_TEXTURE0);
@@ -549,17 +581,26 @@ int main() {
         // Dump info
         {
             char infoBuf[512] = {};
-            snprintf(infoBuf, staticArrayLen(infoBuf), "dt:%fms fps:%i render:%fms x:%i y:%i vert:%ifloats",
-                     deltaTime * 1000.0f, (int)(1.0f / deltaTime), renderTime * 1000.0f, g_context.frameSizeX,
-                     g_context.frameSizeY, vertexBufferLen);
+            snprintf(
+                infoBuf,
+                staticArrayLen(infoBuf),
+                "dt:%fms fps:%i render:%fms x:%i y:%i vert:%ifloats",
+                deltaTime * 1000.0f,
+                (int)(1.0f / deltaTime),
+                renderTime * 1000.0f,
+                g_context.frameSizeX,
+                g_context.frameSizeY,
+                vertexBufferLen);
             puts(infoBuf);
             char titleBuf[1024] = {};
             sprintf(
                 titleBuf,
-                "ISPC Triangle Renderer  [%s] Controls: Move with WASD and Q/E, toggle wireframe with V, Change FOV "
+                "ISPC Triangle Renderer  [%s] Controls: Move with WASD and "
+                "Q/E, toggle wireframe "
+                "with V, Change FOV "
                 "with C/Z",
                 infoBuf);
-            if ((frameIndex % 16) == 0) glfwSetWindowTitle(window, titleBuf);
+            if((frameIndex % 16) == 0) glfwSetWindowTitle(window, titleBuf);
         }
     }
 
