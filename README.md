@@ -33,6 +33,11 @@ The "driver" code is in [main.cpp](main.cpp) and the actual rendering is in [ren
 <img src="screenshots/bunny_teapot_w.png" width=45%>  
 </p>
 
+## How to Build
+- Download and install the [ISPC Compiler](https://github.com/ispc/ispc)
+- In x64 VS Developer Console, run `python build.py`
+- The resulting executable is `main.exe`
+
 ## TODO
 Note: I consider this project more-or-less finished. I don't think I'll actually do things from this list, but who knows. I will happily merge any pull requests though.
 - Proper triangle clipping
