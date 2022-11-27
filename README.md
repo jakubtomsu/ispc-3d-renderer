@@ -7,3 +7,16 @@ The program renders an image on the CPU, which then gets displayed on a screen w
 Depends on [GLFW](https://glfw.org) and [GLAD](https://glad.dav1d.de/) for platform-specific code and OpenGL.
 
 The "driver" code is in [main.cpp](main.cpp) and the actual rendering is in [renderer.ispc](renderer.ispc)
+
+<p>
+<img src="screenshots/swordfish.png" width=45%>  
+<img src="screenshots/swordfish_w.png" width=45%>  
+</p>
+<p>
+<img src="screenshots/wattson.png" width=45%>  
+<img src="screenshots/wattson_w.png" width=45%>  
+</p>
+<p>
+<img src="screenshots/bunny_teapot.png" width=45%>  
+<img src="screenshots/bunny_teapot_w.png" width=45%>  
+</p>
