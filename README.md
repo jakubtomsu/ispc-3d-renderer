@@ -32,3 +32,10 @@ The "driver" code is in [main.cpp](main.cpp) and the actual rendering is in [ren
 <img src="screenshots/bunny_teapot.png" width=45%>  
 <img src="screenshots/bunny_teapot_w.png" width=45%>  
 </p>
+
+## TODO
+Note: I consider this project more-or-less finished. I don't think I'll actually do things from this list, but who knows. I will happily merge any pull requests though.
+- Command line arguments
+- Loading other model file formats
+- Proper triangle clipping
+- Better depth encoding
