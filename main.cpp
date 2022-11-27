@@ -12,8 +12,17 @@
 #include "fast_obj.h"
 
 
+
 #define staticArrayLen(arr) (sizeof(arr) / sizeof(arr[0]))
 #define PI                  3.14159265359f
+
+
+
+//
+// MATH TYPES
+//
+
+
 
 union Vec2 {
     float elems[2];
@@ -46,102 +55,27 @@ union Mat4 {
     float elemsFlat[4 * 4];
 };
 
-struct Camera {
-    Vec3 pos = {};
-    Quat rot = QUAT_IDENTITY;
-    float nearPlane = 0.005f;
-    float farPlane = 1000.0f;
-    float fieldOfView = 90.0f;
-};
 
-struct Context {
-    int frameSizeX;
-    int frameSizeY;
-    uint8_t* framebufferColor;
-    uint16_t* framebufferDepth;
-    Camera camera;
-    Vec3 cameraEuler;
-    Vec2 cursor;
-    bool enableWriteframe;
-};
 
-static Context g_context = {};
+//
+// MATH FUNCTIONS
+//
 
-static size_t getFrameImageSizeInBytes() {
-    return FRAMEBUFFER_COLOR_BYTES * g_context.frameSizeX * g_context.frameSizeY;
-}
 
-static void changeFrameSize(const int x, const int y) {
-    if(x <= 0 || y <= 0) {
-        return;
+
+static inline float clamp(const float value, const float minValue, const float maxValue) {
+    if(value < minValue) {
+        return minValue;
     }
-    if(x == g_context.frameSizeX && y == g_context.frameSizeY) {
-        return;
+    if(value > maxValue) {
+        return maxValue;
     }
-    g_context.frameSizeX = x;
-    g_context.frameSizeY = y;
-    if(g_context.framebufferColor != nullptr) free(g_context.framebufferColor);
-    if(g_context.framebufferDepth != nullptr) free(g_context.framebufferDepth);
-    g_context.framebufferColor = (uint8_t*)malloc(getFrameImageSizeInBytes());
-    g_context.framebufferDepth =
-        (uint16_t*)malloc(FRAMEBUFFER_DEPTH_BYTES * g_context.frameSizeX * g_context.frameSizeY);
-    assert(g_context.framebufferColor != nullptr);
-    assert(g_context.framebufferDepth != nullptr);
-}
-
-// glfw: whenever the window size changed (by OS or user resize) this callback
-// function executes
-static void framebufferSizeChangedGlfwCallback(GLFWwindow* window, int width, int height) {
-    // make sure the viewport matches the new window dimensions; note that width
-    // and height will be significantly larger than specified on retina
-    // displays.
-    glViewport(0, 0, width, height);
-}
-
-static void GLAPIENTRY debugMessageOpenglCallback(
-    GLenum source,
-    GLenum type,
-    GLuint id,
-    GLenum severity,
-    GLsizei length,
-    const GLchar* message,
-    const void* userParam) {
-    printf(
-        "[OpenGl Error]: %s type = 0x%x, severity = 0x%x, message = %s\n",
-        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-        type,
-        severity,
-        message);
-}
-
-static void uploadFrameImageToGpu(GLuint texture) {
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGBA,
-        g_context.frameSizeX,
-        g_context.frameSizeY,
-        0,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        g_context.framebufferColor);
+    return value;
 }
 
 static inline uint8_t floatToUNorm8(const float value) { return (uint8_t)(value * 255.0f); }
 
-static void renderFrameCpp() {
-    const float time = glfwGetTime();
-    assert(g_context.framebufferColor != nullptr);
-    const int frameSizeX = g_context.frameSizeX;
-    const int frameSizeY = g_context.frameSizeY;
-    for(int x = 0; x < frameSizeX; x++) {
-        for(int y = 0; y < frameSizeY; y++) {
-            g_context.framebufferColor[(x + y * frameSizeX) * FRAMEBUFFER_COLOR_BYTES] =
-                floatToUNorm8((float)x / (float)frameSizeX + time);
-        }
-    }
-}
+
 
 static Vec3 vec3Cross(const Vec3 left, const Vec3 right) {
     return {
@@ -155,6 +89,8 @@ static Vec3 vec3MulF(const Vec3 v, const float f) { return {v.x * f, v.y * f, v.
 static Vec3 vec3Add(const Vec3 left, const Vec3 right) {
     return {left.x + right.x, left.y + right.y, left.z + right.z};
 }
+
+
 
 static float quatDot(const Quat left, const Quat right) {
     return left.x * right.x + left.y * right.y + left.z * right.z + left.w * right.w;
@@ -238,6 +174,8 @@ static Mat4 quatToMat4(const Quat q) {
     return result;
 }
 
+
+
 Mat4 mat4Mul(const Mat4 left, const Mat4 right) {
     Mat4 result;
     for(int columns = 0; columns < 4; ++columns) {
@@ -269,6 +207,96 @@ static Mat4 mat4Perspective(const float fov, const float aspectRatioXOverY, cons
     return result;
 }
 
+
+
+//
+// APP
+//
+
+
+
+struct Camera {
+    Vec3 pos = {};
+    Quat rot = QUAT_IDENTITY;
+    float nearPlane = 0.005f;
+    float farPlane = 1000.0f;
+    float fieldOfView = 90.0f;
+};
+
+struct Context {
+    int frameSizeX;
+    int frameSizeY;
+    uint8_t* framebufferColor;
+    uint16_t* framebufferDepth;
+    Camera camera;
+    Vec3 cameraEuler;
+    Vec2 cursor;
+    bool enableWriteframe;
+};
+
+static Context g_context = {};
+
+static size_t getFrameImageSizeInBytes() {
+    return FRAMEBUFFER_COLOR_BYTES * g_context.frameSizeX * g_context.frameSizeY;
+}
+
+static void changeFrameSize(const int x, const int y) {
+    if(x <= 0 || y <= 0) {
+        return;
+    }
+    if(x == g_context.frameSizeX && y == g_context.frameSizeY) {
+        return;
+    }
+    g_context.frameSizeX = x;
+    g_context.frameSizeY = y;
+    if(g_context.framebufferColor != nullptr) free(g_context.framebufferColor);
+    if(g_context.framebufferDepth != nullptr) free(g_context.framebufferDepth);
+    g_context.framebufferColor = (uint8_t*)malloc(getFrameImageSizeInBytes());
+    g_context.framebufferDepth =
+        (uint16_t*)malloc(FRAMEBUFFER_DEPTH_BYTES * g_context.frameSizeX * g_context.frameSizeY);
+    assert(g_context.framebufferColor != nullptr);
+    assert(g_context.framebufferDepth != nullptr);
+}
+
+// glfw: whenever the window size changed (by OS or user resize) this callback
+// function executes
+static void framebufferSizeChangedGlfwCallback(GLFWwindow* window, int width, int height) {
+    // make sure the viewport matches the new window dimensions; note that width
+    // and height will be significantly larger than specified on retina
+    // displays.
+    glViewport(0, 0, width, height);
+}
+
+static void GLAPIENTRY debugMessageOpenglCallback(
+    GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei length,
+    const GLchar* message,
+    const void* userParam) {
+    printf(
+        "[OpenGl Error]: %s type = 0x%x, severity = 0x%x, message = %s\n",
+        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+        type,
+        severity,
+        message);
+}
+
+static void uploadFrameImageToGpu(GLuint texture) {
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        g_context.frameSizeX,
+        g_context.frameSizeY,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        g_context.framebufferColor);
+}
+
 // View to screen matrix
 static Mat4 calcCameraMatrix(const Camera& camera) {
     Mat4 view = {};
@@ -294,15 +322,44 @@ static Mat4 calcCameraMatrix(const Camera& camera) {
     return mat4Mul(perspective, view);
 }
 
-static inline float clamp(const float value, const float minValue, const float maxValue) {
-    if(value < minValue) {
-        return minValue;
+// Load OBJ model from a file
+// returns new vertexBufferLen
+size_t loadModel(
+    const char* path,
+    float* vertexBuffer,
+    const size_t vertexBufferLen,
+    const size_t vertexBufferSize,
+    const Vec3 offset = {},
+    const float scale = 1.0f) {
+    fastObjMesh* mesh = fast_obj_read(path);
+    assert(mesh);
+    size_t len = vertexBufferLen;
+    for(unsigned int ii = 0; ii < mesh->group_count; ii++) {
+        const fastObjGroup& grp = mesh->groups[ii];
+        int idx = 0;
+        for(unsigned int jj = 0; jj < grp.face_count; jj++) {
+            unsigned int fv = mesh->face_vertices[grp.face_offset + jj];
+            for(unsigned int kk = 0; kk < fv; kk++) {
+                fastObjIndex mi = mesh->indices[grp.index_offset + idx];
+                if(mi.p) {
+                    vertexBuffer[len + 0] = offset.elems[0] + mesh->positions[3 * mi.p + 0] * scale;
+                    vertexBuffer[len + 1] = offset.elems[1] + mesh->positions[3 * mi.p + 1] * scale;
+                    vertexBuffer[len + 2] = offset.elems[2] + mesh->positions[3 * mi.p + 2] * scale;
+                    vertexBuffer[len + 3] = mesh->normals[3 * mi.n + 0];
+                    vertexBuffer[len + 4] = mesh->normals[3 * mi.n + 1];
+                    vertexBuffer[len + 5] = mesh->normals[3 * mi.n + 2];
+                    len += VERTEX_FLOATS;
+                    assert(len < vertexBufferSize);
+                }
+                idx++;
+            }
+        }
     }
-    if(value > maxValue) {
-        return maxValue;
-    }
-    return value;
+    fast_obj_destroy(mesh);
+    return len;
 }
+
+
 
 // process all input: query GLFW whether relevant keys are pressed/released this
 // frame and react accordingly
@@ -346,46 +403,12 @@ static void processInput(GLFWwindow* window, const float deltaTime) {
 
     // Reset
     if(glfwGetKey(window, GLFW_KEY_R)) {
-        g_context.camera.pos = {0, 0, 0};
-        g_context.camera.rot = QUAT_IDENTITY;
+        g_context.camera.pos = {0, 1, 2};
+        g_context.cameraEuler = {};
     }
 }
 
-// returns new vertexBufferLen
-size_t loadModel(
-    const char* path,
-    float* vertexBuffer,
-    const size_t vertexBufferLen,
-    const size_t vertexBufferSize,
-    const Vec3 offset = {},
-    const float scale = 1.0f) {
-    fastObjMesh* mesh = fast_obj_read(path);
-    assert(mesh);
-    size_t len = vertexBufferLen;
-    for(unsigned int ii = 0; ii < mesh->group_count; ii++) {
-        const fastObjGroup& grp = mesh->groups[ii];
-        int idx = 0;
-        for(unsigned int jj = 0; jj < grp.face_count; jj++) {
-            unsigned int fv = mesh->face_vertices[grp.face_offset + jj];
-            for(unsigned int kk = 0; kk < fv; kk++) {
-                fastObjIndex mi = mesh->indices[grp.index_offset + idx];
-                if(mi.p) {
-                    vertexBuffer[len + 0] = offset.elems[0] + mesh->positions[3 * mi.p + 0] * scale;
-                    vertexBuffer[len + 1] = offset.elems[1] + mesh->positions[3 * mi.p + 1] * scale;
-                    vertexBuffer[len + 2] = offset.elems[2] + mesh->positions[3 * mi.p + 2] * scale;
-                    vertexBuffer[len + 3] = mesh->normals[3 * mi.n + 0];
-                    vertexBuffer[len + 4] = mesh->normals[3 * mi.n + 1];
-                    vertexBuffer[len + 5] = mesh->normals[3 * mi.n + 2];
-                    len += VERTEX_FLOATS;
-                    assert(len < vertexBufferSize);
-                }
-                idx++;
-            }
-        }
-    }
-    fast_obj_destroy(mesh);
-    return len;
-}
+
 
 // MAIN
 int main() {
@@ -422,6 +445,7 @@ int main() {
         return -1;
     }
 
+    // OpenGL debug output
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(debugMessageOpenglCallback, 0);
 
@@ -528,7 +552,8 @@ int main() {
     // vertexBufferLen = loadModel(
     //     "models/teapot.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer), {2.5, 1, 0}, 0.1f);
 
-    g_context.camera.pos = {-2, 1, 2};
+    g_context.camera.pos = {0, 1, 2};
+    g_context.cameraEuler = {};
 
     double prevTime = glfwGetTime();
 
