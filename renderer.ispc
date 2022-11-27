@@ -214,8 +214,8 @@ export void renderFrame(uniform uint8 framebufferColor[],
         uniform const float<3> skyCol = {0.16,0.20,0.28};
         uniform const float<3> indirectCol = {0.40,0.28,0.20};
         uniform const float<3> cam = {cameraX, cameraY, cameraZ};
-        //uniform const float<3> diffuseCol = {0.85f, 0.1f, 0.3f};
-        uniform const float<3> diffuseCol = {0, 1.0f, 0.8f};
+        uniform const float<3> diffuseCol = {0.85f, 0.1f, 0.3f};
+        // uniform const float<3> diffuseCol = {0, 1.0f, 0.8f};
 
         // Render Geometry
         for(uniform int pointIndex = 0; pointIndex < pointNum; pointIndex += VERTEX_FLOATS * 3) {

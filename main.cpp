@@ -357,7 +357,8 @@ size_t loadModel(
     float* vertexBuffer,
     const size_t vertexBufferLen,
     const size_t vertexBufferSize,
-    const Vec3 offset = {}) {
+    const Vec3 offset = {},
+    const float scale = 1.0f) {
     fastObjMesh* mesh = fast_obj_read(path);
     assert(mesh);
     size_t len = vertexBufferLen;
@@ -369,9 +370,9 @@ size_t loadModel(
             for(unsigned int kk = 0; kk < fv; kk++) {
                 fastObjIndex mi = mesh->indices[grp.index_offset + idx];
                 if(mi.p) {
-                    vertexBuffer[len + 0] = offset.elems[0] + mesh->positions[3 * mi.p + 0];
-                    vertexBuffer[len + 1] = offset.elems[1] + mesh->positions[3 * mi.p + 1];
-                    vertexBuffer[len + 2] = offset.elems[2] + mesh->positions[3 * mi.p + 2];
+                    vertexBuffer[len + 0] = offset.elems[0] + mesh->positions[3 * mi.p + 0] * scale;
+                    vertexBuffer[len + 1] = offset.elems[1] + mesh->positions[3 * mi.p + 1] * scale;
+                    vertexBuffer[len + 2] = offset.elems[2] + mesh->positions[3 * mi.p + 2] * scale;
                     vertexBuffer[len + 3] = mesh->normals[3 * mi.n + 0];
                     vertexBuffer[len + 4] = mesh->normals[3 * mi.n + 1];
                     vertexBuffer[len + 5] = mesh->normals[3 * mi.n + 2];
@@ -522,7 +523,10 @@ int main() {
 
     static float vertexBuffer[1024 * 1024 * 20] = {};
     size_t vertexBufferLen = 0;
-    vertexBufferLen = loadModel("models/wattson.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
+    vertexBufferLen =
+        loadModel("models/swordfish.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer));
+    // vertexBufferLen = loadModel(
+    //     "models/teapot.obj", &vertexBuffer[0], vertexBufferLen, staticArrayLen(vertexBuffer), {2.5, 1, 0}, 0.1f);
 
     g_context.camera.pos = {-2, 1, 2};
 
