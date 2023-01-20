@@ -20,26 +20,26 @@ static inline uniform float edgeFunc(uniform const float<3>& a,uniform const flo
     return (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
 }
 
-static inline void addColorToPixel(uniform uint8 framebufferColor[], const int frameSizeX, const int x, const int y, const uint8<3> color) {
-    const int index = (x + y * frameSizeX) * FRAMEBUFFER_COLOR_BYTES;
-    framebufferColor[index + 0] = clamp((int)framebufferColor[index + 0] + color.r, 0, 255);
-    framebufferColor[index + 1] = clamp((int)framebufferColor[index + 1] + color.g, 0, 255);
-    framebufferColor[index + 2] = clamp((int)framebufferColor[index + 2] + color.b, 0, 255);
+static inline void addColorToPixel(uniform uint8 framebufferColor[], uniform const int frameSizeX, uniform const int x, uniform const int y, uniform const uint8<3> color) {
+    uniform const int pixelIndex = (x + y * frameSizeX) * FRAMEBUFFER_COLOR_BYTES;
+    framebufferColor[pixelIndex + 0] = (uint8)clamp((uniform int)framebufferColor[pixelIndex + 0] + color.r, 0, 255);
+    framebufferColor[pixelIndex + 1] = (uint8)clamp((uniform int)framebufferColor[pixelIndex + 1] + color.g, 0, 255);
+    framebufferColor[pixelIndex + 2] = (uint8)clamp((uniform int)framebufferColor[pixelIndex + 2] + color.b, 0, 255);
 }
 
 void drawDebugLine(uniform uint8 framebufferColor[],
-              const int frameSizeX, const int frameSizeY,
-              int ax, int ay, int bx, int by,
-              const uint8<3> color) {
-    int xdiff = bx - ax;
-	int ydiff = by - ay;
+              uniform const int frameSizeX, uniform const int frameSizeY,
+              uniform const int ax, uniform const int ay, uniform const int bx, uniform const int by,
+              uniform const uint8<3> color) {
+    uniform int xdiff = bx - ax;
+	uniform int ydiff = by - ay;
 
 	if(xdiff == 0 && ydiff == 0) {
 		return;
 	}
     
 	if(abs(xdiff) > abs(ydiff)) {
-		int xmin, xmax;
+		uniform int xmin, xmax;
 		// set xmin to the lower x value given
 		// and xmax to the higher value
 		if(ax < bx) {
@@ -54,15 +54,15 @@ void drawDebugLine(uniform uint8 framebufferColor[],
         xmax = min(frameSizeX-1, xmax);
 
 		// draw line in terms of y slope
-		const float slope = (float)ydiff / (float)xdiff;
-		for(int x = xmin; x <= xmax; x++) {
-			int y = ay + (int)((float)(x - ax) * slope);
+		uniform const float slope = (float)ydiff / (float)xdiff;
+		for(uniform int x = xmin; x <= xmax; x++) {
+			uniform int y = ay + (int)((float)(x - ax) * slope);
             if(y >= 0 && y < frameSizeY) {
 			    addColorToPixel(framebufferColor, frameSizeX, x, y, color);
             }
 		}
 	} else {
-		int ymin, ymax;
+		uniform int ymin, ymax;
 		// set ymin to the lower y value given
 		// and ymax to the higher value
 		if(ay < by) {
@@ -77,9 +77,9 @@ void drawDebugLine(uniform uint8 framebufferColor[],
         ymax = min(frameSizeY-1, ymax);
 
 		// draw line in terms of x slope
-		const float slope = (float)xdiff / (float)ydiff;
-		for(int y = ymin; y <= ymax; y++) {
-			int x = ax + (int)((float)(y - ay) * slope);
+		uniform const float slope = (float)xdiff / (float)ydiff;
+		for(uniform int y = ymin; y <= ymax; y++) {
+			uniform int x = ax + (int)((float)(y - ay) * slope);
             if(x >= 0 && x < frameSizeX) {
 			    addColorToPixel(framebufferColor, frameSizeX, x, y, color);
             }
@@ -154,26 +154,31 @@ static float<3> normalize(const float<3> a) {
     return a / length(a);
 }
 
+struct RenderFrameParams {
+    uint8* framebufferColor;
+    uint16* framebufferDepth;
+    int frameSizeX;
+    int frameSizeY;
+    float* pointData;
+    int pointNum;
+    float transformMat4[4][4];
+    float<3> camera;
+    bool enableWireframe;
+};
 
 // Main function for rendering the frame.
-export void renderFrame(uniform uint8 framebufferColor[],
-                        uniform uint16 framebufferDepth[],
-                        uniform const int frameSizeX, uniform const int frameSizeY,
-                        uniform const float pointData[], uniform const int pointNum,
-                        uniform const float transformMat4[4][4],
-                        uniform const float cameraX, uniform const float cameraY, uniform const float cameraZ,
-                        uniform const bool enableWireframe) {
-    memset(framebufferColor, 42, frameSizeX * frameSizeY * FRAMEBUFFER_COLOR_BYTES);
-    memset(framebufferDepth, 0xff, frameSizeX * frameSizeY * FRAMEBUFFER_DEPTH_BYTES);
+export void renderFrame(RenderFrameParams* uniform params) {
+    memset(params->framebufferColor, 42, params->frameSizeX * params->frameSizeY * FRAMEBUFFER_COLOR_BYTES);
+    memset(params->framebufferDepth, 0xff, params->frameSizeX * params->frameSizeY * FRAMEBUFFER_DEPTH_BYTES);
 
-    if(enableWireframe) {
+    if(params->enableWireframe) {
         // Render Geometry
-        for(uniform int pointIndex = 0; pointIndex < pointNum; pointIndex += VERTEX_FLOATS * 3) {
+        for(uniform int pointpixelIndex = 0; pointpixelIndex < params->pointNum; pointpixelIndex += VERTEX_FLOATS * 3) {
             // Load vertex data
             uniform float<4> positions[3] = {
-                {pointData[pointIndex + 0], pointData[pointIndex + 1], pointData[pointIndex + 2], 1.0f},
-                {pointData[pointIndex + 6], pointData[pointIndex + 7], pointData[pointIndex + 8], 1.0f},
-                {pointData[pointIndex + 12], pointData[pointIndex + 13], pointData[pointIndex + 14], 1.0f},
+                {params->pointData[pointpixelIndex + 0], params->pointData[pointpixelIndex + 1], params->pointData[pointpixelIndex + 2], 1.0f},
+                {params->pointData[pointpixelIndex + 6], params->pointData[pointpixelIndex + 7], params->pointData[pointpixelIndex + 8], 1.0f},
+                {params->pointData[pointpixelIndex + 12], params->pointData[pointpixelIndex + 13], params->pointData[pointpixelIndex + 14], 1.0f},
             };
     
             uniform float<4> transformedPositions[3] = {0};
@@ -181,8 +186,8 @@ export void renderFrame(uniform uint8 framebufferColor[],
 
             foreach(v = 0 ... 3, row = 0 ... 4) {
                 float sum = 0.0f;
-                for(int col = 0; col < 4; col++) {
-                    sum += transformMat4[col][row] * positions[v][col];
+                for(uniform int col = 0; col < 4; col++) {
+                    sum += params->transformMat4[col][row] * positions[v][col];
                 }
                 transformedPositions[v][row] = sum;
                 shouldSkipTriangle |= transformedPositions[v].z < 0.0f;
@@ -195,14 +200,14 @@ export void renderFrame(uniform uint8 framebufferColor[],
             }
             
             // Transform into pixel positions
-            uniform const int<2> v0 = transformToPixelCoord(transformedPositions[0].xy, frameSizeX, frameSizeY);
-            uniform const int<2> v1 = transformToPixelCoord(transformedPositions[1].xy, frameSizeX, frameSizeY);
-            uniform const int<2> v2 = transformToPixelCoord(transformedPositions[2].xy, frameSizeX, frameSizeY);
+            uniform const int<2> v0 = transformToPixelCoord(transformedPositions[0].xy, params->frameSizeX, params->frameSizeY);
+            uniform const int<2> v1 = transformToPixelCoord(transformedPositions[1].xy, params->frameSizeX, params->frameSizeY);
+            uniform const int<2> v2 = transformToPixelCoord(transformedPositions[2].xy, params->frameSizeX, params->frameSizeY);
         
-            const uint8<3> triLineCol = {2, 20, 5};
-            drawDebugLine(framebufferColor, frameSizeX, frameSizeY, v0.x, v0.y, v1.x, v1.y, triLineCol);
-            drawDebugLine(framebufferColor, frameSizeX, frameSizeY, v1.x, v1.y, v2.x, v2.y, triLineCol);
-            drawDebugLine(framebufferColor, frameSizeX, frameSizeY, v2.x, v2.y, v0.x, v0.y, triLineCol);
+            uniform const uint8<3> triLineCol = {2, 20, 5};
+            drawDebugLine(params->framebufferColor, params->frameSizeX, params->frameSizeY, v0.x, v0.y, v1.x, v1.y, triLineCol);
+            drawDebugLine(params->framebufferColor, params->frameSizeX, params->frameSizeY, v1.x, v1.y, v2.x, v2.y, triLineCol);
+            drawDebugLine(params->framebufferColor, params->frameSizeX, params->frameSizeY, v2.x, v2.y, v0.x, v0.y, triLineCol);
             
             wireframeEnd:;
         }
@@ -213,34 +218,35 @@ export void renderFrame(uniform uint8 framebufferColor[],
         uniform const float<3> sunCol = {1.64,1.27,0.99};
         uniform const float<3> skyCol = {0.16,0.20,0.28};
         uniform const float<3> indirectCol = {0.40,0.28,0.20};
-        uniform const float<3> cam = {cameraX, cameraY, cameraZ};
         uniform const float<3> diffuseCol = {0.85f, 0.1f, 0.3f};
         // uniform const float<3> diffuseCol = {0, 1.0f, 0.8f};
 
         // Render Geometry
-        for(uniform int pointIndex = 0; pointIndex < pointNum; pointIndex += VERTEX_FLOATS * 3) {
+        for(uniform int pointpixelIndex = 0; pointpixelIndex < params->pointNum; pointpixelIndex += VERTEX_FLOATS * 3) {
             // Load vertex positions
             uniform float<4> positions[3] = {
-                {pointData[pointIndex + 0], pointData[pointIndex + 1], pointData[pointIndex + 2], 1.0f},
-                {pointData[pointIndex + 6], pointData[pointIndex + 7], pointData[pointIndex + 8], 1.0f},
-                {pointData[pointIndex + 12], pointData[pointIndex + 13], pointData[pointIndex + 14], 1.0f},
+                {params->pointData[pointpixelIndex + 0], params->pointData[pointpixelIndex + 1], params->pointData[pointpixelIndex + 2], 1.0f},
+                {params->pointData[pointpixelIndex + 6], params->pointData[pointpixelIndex + 7], params->pointData[pointpixelIndex + 8], 1.0f},
+                {params->pointData[pointpixelIndex + 12], params->pointData[pointpixelIndex + 13], params->pointData[pointpixelIndex + 14], 1.0f},
             };
             
+            uniform const float area = edgeFunc(positions[0].xyz, positions[1].xyz, positions[2].xyz);
+
             // Backface culling
-            if(dot(cam - positions[0].xyz,
-                   cross(positions[1].xyz - positions[0].xyz,
-                         positions[2].xyz - positions[0].xyz)) < 0.0f) {
+            if(area > 0.0) {
                 goto triangleEnd;
             }
     
             uniform float<4> transformedPositions[3] = {0};
             uniform float<3> screenPositonClipZ;
+
+            // HACK: don't draw any triangles with a vertex behind the near plane
             varying bool shouldSkipTriangle = false;
 
             foreach(v = 0 ... 3, row = 0 ... 4) {
                 float sum = 0.0f;
-                for(int col = 0; col < 4; col++) {
-                    sum += transformMat4[col][row] * positions[v][col];
+                for(uniform int col = 0; col < 4; col++) {
+                    sum += params->transformMat4[col][row] * positions[v][col];
                 }
                 transformedPositions[v][row] = sum;
                 shouldSkipTriangle |= transformedPositions[v].z < 0.0f;
@@ -257,9 +263,9 @@ export void renderFrame(uniform uint8 framebufferColor[],
             }
             
             // Transform into pixel positions
-            uniform const int<2> v0 = transformToPixelCoord(transformedPositions[0].xy, frameSizeX, frameSizeY);
-            uniform const int<2> v1 = transformToPixelCoord(transformedPositions[1].xy, frameSizeX, frameSizeY);
-            uniform const int<2> v2 = transformToPixelCoord(transformedPositions[2].xy, frameSizeX, frameSizeY);
+            uniform const int<2> v0 = transformToPixelCoord(transformedPositions[0].xy, params->frameSizeX, params->frameSizeY);
+            uniform const int<2> v1 = transformToPixelCoord(transformedPositions[1].xy, params->frameSizeX, params->frameSizeY);
+            uniform const int<2> v2 = transformToPixelCoord(transformedPositions[2].xy, params->frameSizeX, params->frameSizeY);
     
             // Compute triangle bounding box
             uniform const int<2> bbMin = {
@@ -267,21 +273,19 @@ export void renderFrame(uniform uint8 framebufferColor[],
                 max(0, minInt3(v0.y, v1.y, v2.y)),
             };
             uniform const int<2> bbMax = {
-                min(frameSizeX - 1, maxInt3(v0.x, v1.x, v2.x)),
-                min(frameSizeY - 1, maxInt3(v0.y, v1.y, v2.y)),
+                min(params->frameSizeX - 1, maxInt3(v0.x, v1.x, v2.x)),
+                min(params->frameSizeY - 1, maxInt3(v0.y, v1.y, v2.y)),
             };
-    
-            uniform const float area = edgeFunc(positions[0].xyz, positions[1].xyz, positions[2].xyz);
-            
+                
             uniform const float screenPosInvZ0 = 1.0f / screenPositonClipZ[0];
             uniform const float screenPosInvZ1 = 1.0f / screenPositonClipZ[1];
             uniform const float screenPosInvZ2 = 1.0f / screenPositonClipZ[2];
             
             // Load vertex normals
             uniform float<3> normals[3] = {
-                {pointData[pointIndex + 3], pointData[pointIndex + 4], pointData[pointIndex + 5]},
-                {pointData[pointIndex + 9], pointData[pointIndex + 10], pointData[pointIndex + 11]},
-                {pointData[pointIndex + 15], pointData[pointIndex + 16], pointData[pointIndex + 17]},
+                {params->pointData[pointpixelIndex + 3], params->pointData[pointpixelIndex + 4], params->pointData[pointpixelIndex + 5]},
+                {params->pointData[pointpixelIndex + 9], params->pointData[pointpixelIndex + 10], params->pointData[pointpixelIndex + 11]},
+                {params->pointData[pointpixelIndex + 15], params->pointData[pointpixelIndex + 16], params->pointData[pointpixelIndex + 17]},
             };
             
             normals[0] *= screenPosInvZ0;
@@ -319,18 +323,18 @@ export void renderFrame(uniform uint8 framebufferColor[],
                             w2a * screenPositonClipZ[2]) * z;
     
                         if(depth > 0.0f) {
-                            const int index = x + y * frameSizeX;
-                            const uint16 prevDepth = framebufferDepth[index];
+                            const int pixelIndex = x + y * params->frameSizeX;
+                            const uint prevDepth = params->framebufferDepth[pixelIndex];
                             // Note: the sqrt is a hack. I'm not really sure how to encode the depth
                             // properly, but linear is definitely not the right way.
-                            const uint16 depth16 = (int)(sqrt(depth) * 2000.0f);
+                            const uint depth16 = (int)(sqrt(depth) * 2000.0f);
                             if(depth16 < prevDepth) {
-                                framebufferDepth[index] = depth16;
+                                params->framebufferDepth[pixelIndex] = depth16;
     
                                 const float<3> normal = (w0a * normals[0] + w1a * normals[1] + w2a * normals[2]) * z;
                                 const float<3> position = (w0a * positions[0].xyz + w1a * positions[1].xyz + w2a * positions[2].xyz) * z;
     
-                                const float<3> viewDir = normalize(cam - position);
+                                const float<3> viewDir = normalize(params->camera - position);
                                 
                                 // Compute the pixel color
                                 float<3> color = diffuseCol;
@@ -347,13 +351,13 @@ export void renderFrame(uniform uint8 framebufferColor[],
                                 color *= 0.8f;
                                 #endif
                                 
-                                framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 0] = float_to_srgb8(color[0]);
-                                framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 1] = float_to_srgb8(color[1]);
-                                framebufferColor[index * FRAMEBUFFER_COLOR_BYTES + 2] = float_to_srgb8(color[2]);
+                                params->framebufferColor[pixelIndex * FRAMEBUFFER_COLOR_BYTES + 0] = float_to_srgb8(color[0]);
+                                params->framebufferColor[pixelIndex * FRAMEBUFFER_COLOR_BYTES + 1] = float_to_srgb8(color[1]);
+                                params->framebufferColor[pixelIndex * FRAMEBUFFER_COLOR_BYTES + 2] = float_to_srgb8(color[2]);
                             }
-                            // else framebufferColor[(x + y * frameSizeX) * 4 + 1] = 255;
+                            // else params->framebufferColor[(x + y * params->frameSizeX) * 4 + 1] = 255;
                         }
-                        // else framebufferColor[(x + y * frameSizeX) * 4] = 255;
+                        else params->framebufferColor[(x + y * params->frameSizeX) * 4] = 255;
                     }
     
                     // One step to the right

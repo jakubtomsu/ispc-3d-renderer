@@ -12,6 +12,20 @@
 #ifdef __cplusplus
 namespace ispc { /* namespace */
 #endif // __cplusplus
+///////////////////////////////////////////////////////////////////////////
+// Vector types with external visibility from ispc code
+///////////////////////////////////////////////////////////////////////////
+
+#ifndef __ISPC_VECTOR_float3__
+#define __ISPC_VECTOR_float3__
+#ifdef _MSC_VER
+__declspec( align(16) ) struct float3 { float v[3]; };
+#else
+struct float3 { float v[3]; } __attribute__ ((aligned(16)));
+#endif
+#endif
+
+
 
 #ifndef __ISPC_ALIGN__
 #if defined(__clang__) || !defined(_MSC_VER)
@@ -25,6 +39,21 @@ namespace ispc { /* namespace */
 #endif
 #endif
 
+#ifndef __ISPC_STRUCT_RenderFrameParams__
+#define __ISPC_STRUCT_RenderFrameParams__
+struct RenderFrameParams {
+    uint8_t * framebufferColor;
+    uint16_t * framebufferDepth;
+    int32_t frameSizeX;
+    int32_t frameSizeY;
+    float * pointData;
+    int32_t pointNum;
+    float transformMat4[4][4];
+    float3  camera;
+    bool enableWireframe;
+};
+#endif
+
 
 ///////////////////////////////////////////////////////////////////////////
 // Functions exported from ispc code
@@ -32,7 +61,7 @@ namespace ispc { /* namespace */
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 extern "C" {
 #endif // __cplusplus
-    extern void renderFrame(uint8_t * framebufferColor, uint16_t * framebufferDepth, const int32_t frameSizeX, const int32_t frameSizeY, const float * pointData, const int32_t pointNum, const float transformMat4[][4], const float cameraX, const float cameraY, const float cameraZ, const bool enableWireframe);
+    extern void renderFrame(struct RenderFrameParams * params);
 #if defined(__cplusplus) && (! defined(__ISPC_NO_EXTERN_C) || !__ISPC_NO_EXTERN_C )
 } /* end extern C */
 #endif // __cplusplus

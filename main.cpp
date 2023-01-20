@@ -580,18 +580,19 @@ int main() {
         const Mat4 transformMat4 = calcCameraMatrix(g_context.camera);
 
         const double renderBegin = glfwGetTime();
-        ispc::renderFrame(
-            g_context.framebufferColor,
-            g_context.framebufferDepth,
-            g_context.frameSizeX,
-            g_context.frameSizeY,
-            &vertexBuffer[0],
-            vertexBufferLen,
-            &transformMat4.elems[0],
-            g_context.camera.pos.x,
-            g_context.camera.pos.y,
-            g_context.camera.pos.z,
-            g_context.enableWriteframe);
+        ispc::RenderFrameParams params = {
+            .framebufferColor = g_context.framebufferColor,
+            .framebufferDepth = g_context.framebufferDepth,
+            .frameSizeX = g_context.frameSizeX,
+            .frameSizeY = g_context.frameSizeY,
+            .pointData = &vertexBuffer[0],
+            .pointNum = vertexBufferLen,
+            .transformMat4 = &transformMat4.elems[0],
+            .camera = g_context.camera.pos,
+            .enableWireframe = g_context.enableWriteframe,
+        };
+
+        ispc::renderFrame(&params);
         const double renderTime = glfwGetTime() - renderBegin;
 
         uploadFrameImageToGpu(frameTexture);
